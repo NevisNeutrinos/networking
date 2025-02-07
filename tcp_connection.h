@@ -11,7 +11,8 @@ using asio::ip::tcp;
 
 class TCPConnection {
 public:
-    TCPConnection(asio::io_context& io_context, short port, bool is_server);
+    TCPConnection(asio::io_context& io_context, const std::string& ip_address,
+        short port, bool is_server);
 
     std::deque<Command> send_command_buffer_;
     std::deque<Command> recv_command_buffer_;

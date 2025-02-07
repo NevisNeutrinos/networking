@@ -1,7 +1,8 @@
 #include "tcp_connection.h"
 
-TCPConnection::TCPConnection(asio::io_context& io_context, const short port, const bool is_server)
-    : acceptor_(io_context, tcp::endpoint(tcp::v4(), port)),
+TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip_address,
+    const short port, const bool is_server)
+    : acceptor_(io_context, tcp::endpoint(asio::ip::make_address(ip_address), port)),
       accept_socket_(io_context),
       socket_(io_context),
       port_(port) {
