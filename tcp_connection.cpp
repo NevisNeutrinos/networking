@@ -68,12 +68,12 @@ void TCPConnection::ReadData() {
                 num_bytes = 0;
                 std::cout << "CState" << read_state_ << std::endl;
                 num_bytes += ReadHandler(TCPProtocol::getHeaderSize());
-                auto *buf_ptr_16 = reinterpret_cast<uint16_t *>(&buffer_);
-                if (!TCPProtocol::GoodStartCode(buf_ptr_16[0], buf_ptr_16[1])) {
+                auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
+                if (!TCPProtocol::GoodStartCode(header->start_code1, header->start_code2)) {
                     std::cerr << "Bad start code!" << std::endl;
                 }
-                arg_count = buf_ptr_16[3];
-                recv_command_buffer_.emplace_back(buf_ptr_16[2], buf_ptr_16[3]);
+                arg_count = header->arg_count; 
+                recv_command_buffer_.emplace_back(header->cmd_code, header->arg_count);
                 std::cout << "NArgs: " << arg_count << std::endl;
                 read_state_ = kArgs;
                 break;
@@ -91,9 +91,9 @@ void TCPConnection::ReadData() {
             case kFooter: {
                 std::cout << "CState" << read_state_ << std::endl;
                 ReadHandler(TCPProtocol::getFooterSize());
-                auto *buf_ptr_16 = reinterpret_cast<uint16_t *>(&buffer_);
-                crc = buf_ptr_16[0];
-                if(!TCPProtocol::GoodEndCode(buf_ptr_16[1], buf_ptr_16[2])) {
+                auto *footer = reinterpret_cast<TCPProtocol::Footer *>(&buffer_);
+                crc = footer->crc;
+                if(!TCPProtocol::GoodEndCode(footer->end_code1, footer->end_code2)) {
                     std::cerr << "Bad end code!" << std::endl;
                 }
                 std::cout << "Received all data!" << std::endl;

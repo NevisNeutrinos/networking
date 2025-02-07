@@ -40,6 +40,19 @@ public:
     uint16_t end_code1;
     uint16_t end_code2;
 
+    struct Header {
+        uint16_t start_code1;
+        uint16_t start_code2;
+        uint16_t cmd_code;
+        uint16_t arg_count;
+    };
+
+    struct Footer {
+        uint16_t crc;
+        uint16_t end_code1;
+        uint16_t end_code2;
+    };
+
     static uint16_t getHeaderSize() { return header_size_; }
     static uint16_t getFooterSize() { return footer_size_; }
     static bool GoodStartCode(const uint16_t code1, const uint16_t code2) {
