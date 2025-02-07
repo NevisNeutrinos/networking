@@ -1,4 +1,4 @@
-#include "../networking/tcp_connection.h"
+#include "tcp_connection.h"
 #include <iostream>
 
 

@@ -1,6 +1,6 @@
 #include <iostream>
 #include <asio.hpp>
-#include "../networking/tcp_protocol.h"
+#include "tcp_protocol.h"
 
 using asio::ip::tcp;
 
