@@ -22,9 +22,10 @@ private:
     uint8_t buffer_[1000];
     short port_;
 
-    void MakeClient();
-    void MakeServer();
+    void StartClient();
+    void StartServer();
     size_t ReadHandler(size_t read_bytes);
+    void ReadWriteHandler();
     void ReadData();
     void EchoData();
     void SendData();

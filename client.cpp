@@ -53,12 +53,14 @@ int main() {
             std::vector<uint8_t> buffer = packet.Serialize();
             asio::write(socket, asio::buffer(buffer));
 
+            // while (socket.available()) {
             std::vector<uint8_t> reply(buffer.size());
             std::size_t length = read(socket, asio::buffer(reply, buffer.size()));
 
             TCPProtocol reply_packet = Deserialize(reply);
             std::cout << "Server response nBytes: " << length << std::endl;
             reply_packet.print();
+            // }
         }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

@@ -8,32 +8,40 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const short port, con
 
     std::cout << "Server started on port " << port << "..." << std::endl;
     read_state_ = kHeader;
-    is_server ? MakeServer() : MakeClient();
+    is_server ? StartServer() : StartClient();
 }
 
-void TCPConnection::MakeServer() {
+void TCPConnection::StartServer() {
     acceptor_.async_accept(accept_socket_, [this](std::error_code ec) {
       if (!ec) {
         std::cout << "New client connected!" << std::endl;
           socket_ = std::move(accept_socket_);
-          std::thread(&TCPConnection::ReadData, this).detach();
+          std::thread(&TCPConnection::ReadWriteHandler, this).detach();
       }
-      MakeServer();  // Accept the next client
+      StartServer();  // Accept the next client
     });
 }
 
-void TCPConnection::MakeClient() {
+void TCPConnection::StartClient() {
 
     tcp::endpoint endpoint(tcp::endpoint(tcp::v4(), port_));
     socket_.async_connect(endpoint,
     [this](const asio::error_code& ec) {
         if (!ec) {
             std::cout << "Connected to server!" << std::endl;
-            std::thread(&TCPConnection::ReadData, this).detach();
+            std::thread(&TCPConnection::ReadWriteHandler, this).detach();
         } else {
             std::cerr << "Connection failed: " << ec.message() << std::endl;
         }
     });
+}
+
+void TCPConnection::ReadWriteHandler() {
+    while (socket_.is_open()) {
+        if (socket_.available()) ReadData();
+        if (!send_command_buffer_.empty()) SendData();
+        usleep(50000);
+    }
 }
 
 size_t TCPConnection::ReadHandler(size_t read_bytes) {
@@ -50,10 +58,12 @@ void TCPConnection::ReadData() {
     uint16_t arg_count = 0;
     uint16_t crc = 0;
     size_t num_bytes = 0;
+    bool complete_packet = false;
 
-    while (socket_.is_open()) {
+    while (!complete_packet) {
         switch (read_state_) {
             case kHeader: {
+                complete_packet = false;
                 num_bytes = 0;
                 std::cout << "CState" << read_state_ << std::endl;
                 num_bytes += ReadHandler(TCPProtocol::getHeaderSize());
@@ -61,7 +71,6 @@ void TCPConnection::ReadData() {
                 if (!TCPProtocol::GoodStartCode(buf_ptr_16[0], buf_ptr_16[1])) {
                     std::cerr << "Bad start code!" << std::endl;
                 }
-                command_code = buf_ptr_16[2];
                 arg_count = buf_ptr_16[3];
                 recv_command_buffer_.emplace_back(buf_ptr_16[2], buf_ptr_16[3]);
                 std::cout << "NArgs: " << arg_count << std::endl;
@@ -70,7 +79,7 @@ void TCPConnection::ReadData() {
             }
             case kArgs: {
                 std::cout << "CState" << read_state_ << std::endl;
-                num_bytes += ReadHandler(arg_count * 4);
+                num_bytes += ReadHandler(arg_count * sizeof(int32_t));
                 auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
                 for (int i = 0; i < arg_count; i++) {
                     recv_command_buffer_.back().arguments[i] = buf_ptr_32[i];
@@ -88,6 +97,7 @@ void TCPConnection::ReadData() {
                 }
                 std::cout << "Received all data!" << std::endl;
                 read_state_ = debug ? kEndRecv : kHeader;
+                complete_packet = !debug;
                 break;
             }
             case kEndRecv: {
@@ -100,6 +110,7 @@ void TCPConnection::ReadData() {
                 std::cout << " " << std::endl;
                 EchoData();
                 read_state_ = kHeader;
+                complete_packet = true;
                 break;
             }
             default: {
@@ -116,7 +127,6 @@ void TCPConnection::EchoData() {
         send_command_buffer_.emplace_back(recv_command_buffer_.front());
         recv_command_buffer_.pop_front();
     }
-    SendData();
 }
 
 void TCPConnection::SendData() {
@@ -127,6 +137,7 @@ void TCPConnection::SendData() {
         packet.arguments = std::move(send_command_buffer_.front().arguments);
         std::vector<uint8_t> buffer = packet.Serialize();
         num_bytes += asio::write(socket_, asio::buffer(buffer));
+
         send_command_buffer_.pop_front();
     }
     std::cout << "Sent Bytes: " << num_bytes << std::endl;

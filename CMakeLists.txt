@@ -17,7 +17,7 @@ endif()
 
 # Standalone Client
 message(STATUS "Compiling Standalone Client")
-add_executable(GramsReadoutClient tcp_client.cpp
+add_executable(GramsReadoutClient client.cpp
         tcp_protocol.h
         tcp_protocol.cpp)
 target_compile_definitions(GramsReadoutClient PRIVATE ASIO_STANDALONE)
