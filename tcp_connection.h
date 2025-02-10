@@ -17,11 +17,22 @@ public:
     std::deque<Command> send_command_buffer_;
     std::deque<Command> recv_command_buffer_;
 
+    // Interface to send/receive commands and data
+    void WriteSendBuffer(TCPProtocol::CommandCodes cmd, std::vector<int32_t>& vec);
+    void WriteSendBuffer(const Command& cmd_struct);
+
+    Command ReadRecvBuffer();
+    std::vector<Command> ReadRecvBuffer(size_t num_cmds);
+
 private:
-    tcp::acceptor acceptor_;
-    tcp::socket socket_, accept_socket_;
+    std::optional<tcp::acceptor> acceptor_;
+    std::optional<tcp::socket> accept_socket_;
+    tcp::endpoint endpoint_;
+    tcp::socket socket_;
     uint8_t buffer_[1000];
     short port_;
+
+    std::mutex mutex_;
 
     void StartClient();
     void StartServer();
@@ -30,6 +41,8 @@ private:
     void ReadData();
     void EchoData();
     void SendData();
+    bool DataInSendBuffer();
+    bool DataInRecvBuffer();
 
     enum ReadStates {
         kHeader,

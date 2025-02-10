@@ -27,13 +27,26 @@ private:
 
 public:
 
+    // These are the codes which will be sent
+    // to the HUB computer.
+    enum class CommandCodes : uint16_t {
+        kConfigure = 0,
+        kStartRun = 1,
+        kStopRun = 2,
+        kGetStatus = 3,
+        kPrepareRestart = 4,
+        kRestart = 5,
+        kPrepareShutdown = 6,
+        kShutdown = 7
+    };
+
     // Constructor
-    TCPProtocol(uint16_t cmd, size_t vec_size);
+    TCPProtocol(CommandCodes cmd, size_t vec_size);
 
     // Structure for a packet
     uint16_t start_code1 = kEndCode1;
     uint16_t start_code2;
-    uint16_t command_code;
+    CommandCodes command_code;
     uint16_t arg_count;
     std::vector<int32_t> arguments;
     uint16_t crc;
@@ -43,7 +56,7 @@ public:
     struct Header {
         uint16_t start_code1;
         uint16_t start_code2;
-        uint16_t cmd_code;
+        CommandCodes cmd_code; // really an uint16_t
         uint16_t arg_count;
     };
 
@@ -70,13 +83,13 @@ public:
 class Command {
 public:
 
-    uint16_t command;
+    TCPProtocol::CommandCodes command;
     std::vector<int32_t> arguments;
 
-    Command(const uint16_t cmd, const size_t vec_size) : command(cmd), arguments(vec_size) {}
+    Command(const TCPProtocol::CommandCodes cmd, const size_t vec_size) : command(cmd), arguments(vec_size) {}
 
     void print() {
-        std::cout << "Command:      " << command << " \n";
+        std::cout << "Command:      " << static_cast<uint16_t>(command) << " \n";
         std::cout << "Args: ";
         for (auto &arg : arguments) {
             std::cout << " " << arg;

@@ -16,8 +16,10 @@ else()
 endif()
 
 # Standalone Client
-message(STATUS "Compiling Standalone Client")
+message(STATUS "Compiling Client")
 add_executable(GramsReadoutClient client.cpp
+        tcp_connection.cpp
+        tcp_connection.h
         tcp_protocol.h
         tcp_protocol.cpp)
 target_compile_definitions(GramsReadoutClient PRIVATE ASIO_STANDALONE)
@@ -26,7 +28,7 @@ target_link_libraries(GramsReadoutClient PRIVATE pthread)
 
 
 ## TCP/IP Connection
-message(STATUS "Compiling TCP/IP Connection")
+message(STATUS "Compiling Server")
 add_executable(GramsReadoutConnect server.cpp
         tcp_connection.cpp
         tcp_connection.h

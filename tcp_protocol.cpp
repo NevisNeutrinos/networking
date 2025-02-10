@@ -4,7 +4,7 @@
 
 #include "tcp_protocol.h"
 
-TCPProtocol::TCPProtocol(const uint16_t cmd, const size_t vec_size) : command_code(cmd),
+TCPProtocol::TCPProtocol(const CommandCodes cmd, const size_t vec_size) : command_code(cmd),
                                                                       arg_count(vec_size),
                                                                       arguments(vec_size) {
     start_code1 = kStartCode1;
@@ -46,7 +46,7 @@ void TCPProtocol::print() {
     std::cout   << "Start Code 1: 0x" << start_code1 << " \n"
                 << "Start Code 2: 0x" << start_code2 << " \n";
     std::cout << std::dec;
-    std::cout << "Command:      " << command_code << " \n"
+    std::cout << "Command:      " << static_cast<uint16_t>(command_code) << " \n"
                 << "NArgs:        " << arg_count << " \n";
     std::cout << "Args: ";
     for (auto &arg : arguments) {

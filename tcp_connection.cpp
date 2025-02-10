@@ -2,21 +2,28 @@
 
 TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip_address,
     const short port, const bool is_server)
-    : acceptor_(io_context, tcp::endpoint(asio::ip::make_address(ip_address), port)),
-      accept_socket_(io_context),
+    : endpoint_(asio::ip::make_address(ip_address), port),
       socket_(io_context),
       port_(port) {
 
-    std::cout << "Server started on port " << port << "..." << std::endl;
     read_state_ = kHeader;
-    is_server ? StartServer() : StartClient();
+    if (is_server) {
+        std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
+        acceptor_.emplace(tcp::acceptor(io_context, endpoint_));
+        accept_socket_.emplace(io_context);
+        StartServer();
+    }
+    else {
+        std::cout << "Starting Client on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
+        StartClient();
+    }
 }
 
 void TCPConnection::StartServer() {
-    acceptor_.async_accept(accept_socket_, [this](std::error_code ec) {
+    acceptor_->async_accept(*accept_socket_, [this](std::error_code ec) {
       if (!ec) {
         std::cout << "New client connected!" << std::endl;
-          socket_ = std::move(accept_socket_);
+          socket_ = std::move(*accept_socket_);
           std::thread(&TCPConnection::ReadWriteHandler, this).detach();
       }
       StartServer();  // Accept the next client
@@ -24,9 +31,7 @@ void TCPConnection::StartServer() {
 }
 
 void TCPConnection::StartClient() {
-
-    tcp::endpoint endpoint(tcp::endpoint(tcp::v4(), port_));
-    socket_.async_connect(endpoint,
+    socket_.async_connect(endpoint_,
     [this](const asio::error_code& ec) {
         if (!ec) {
             std::cout << "Connected to server!" << std::endl;
@@ -40,7 +45,7 @@ void TCPConnection::StartClient() {
 void TCPConnection::ReadWriteHandler() {
     while (socket_.is_open()) {
         if (socket_.available()) ReadData();
-        if (!send_command_buffer_.empty()) SendData();
+        if (DataInSendBuffer()) SendData();
         usleep(50000);
     }
 }
@@ -72,7 +77,8 @@ void TCPConnection::ReadData() {
                 if (!TCPProtocol::GoodStartCode(header->start_code1, header->start_code2)) {
                     std::cerr << "Bad start code!" << std::endl;
                 }
-                arg_count = header->arg_count; 
+                arg_count = header->arg_count;
+                std::lock_guard<std::mutex> lock(mutex_);
                 recv_command_buffer_.emplace_back(header->cmd_code, header->arg_count);
                 std::cout << "NArgs: " << arg_count << std::endl;
                 read_state_ = kArgs;
@@ -82,6 +88,7 @@ void TCPConnection::ReadData() {
                 std::cout << "CState" << read_state_ << std::endl;
                 num_bytes += ReadHandler(arg_count * sizeof(int32_t));
                 auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
+                std::lock_guard<std::mutex> lock(mutex_);
                 for (int i = 0; i < arg_count; i++) {
                     recv_command_buffer_.back().arguments[i] = buf_ptr_32[i];
                 }
@@ -102,14 +109,15 @@ void TCPConnection::ReadData() {
                 break;
             }
             case kEndRecv: {
-                std::cout << "Cmd: " << recv_command_buffer_.back().command << std::endl;
+                // std::lock_guard<std::mutex> lock(mutex_);
+                std::cout << "Cmd: " << static_cast<uint16_t>(recv_command_buffer_.back().command) << std::endl;
                 std::cout << "Num Args: " << recv_command_buffer_.back().arguments.size() << std::endl;
                 std::cout << "Args: ";
                 for (auto &arg : recv_command_buffer_.back().arguments) {
                     std::cout << arg << " ";
                 }
                 std::cout << " " << std::endl;
-                EchoData();
+                // EchoData();
                 read_state_ = kHeader;
                 complete_packet = true;
                 break;
@@ -121,24 +129,71 @@ void TCPConnection::ReadData() {
     }
 }
 
+bool TCPConnection::DataInSendBuffer() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return !send_command_buffer_.empty();
+}
+
+bool TCPConnection::DataInRecvBuffer() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return !recv_command_buffer_.empty();
+}
+
+Command TCPConnection::ReadRecvBuffer() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Command command = recv_command_buffer_.front();
+    recv_command_buffer_.pop_front();
+    return command;
+}
+
+std::vector<Command> TCPConnection::ReadRecvBuffer(size_t num_cmds) {
+    std::vector<Command> commands;
+    commands.reserve(num_cmds);
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    size_t num_reads = num_cmds > recv_command_buffer_.size() ? recv_command_buffer_.size() : num_cmds;
+    if (num_cmds > recv_command_buffer_.size()) {
+        std::cout << "Requested commands larger than buffer size, just reading whole buffer: "
+        << num_reads << std::endl;
+    }
+
+    for (size_t i = 0; i < num_reads; i++) {
+        commands.push_back(std::move(recv_command_buffer_.front()));
+        recv_command_buffer_.pop_front();
+    }
+    return commands;
+}
+
 void TCPConnection::EchoData() {
     std::cout << "EchoData!" << std::endl;
-
-    while (!recv_command_buffer_.empty()) {
-        send_command_buffer_.emplace_back(recv_command_buffer_.front());
+    while (DataInRecvBuffer()) {
+        WriteSendBuffer(ReadRecvBuffer());
+        std::lock_guard<std::mutex> lock(mutex_);
         recv_command_buffer_.pop_front();
     }
 }
 
+void TCPConnection::WriteSendBuffer(TCPProtocol::CommandCodes cmd, std::vector<int32_t>& vec) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    send_command_buffer_.emplace_back(cmd, vec.size());
+    send_command_buffer_.back().arguments = std::move(vec);
+}
+
+void TCPConnection::WriteSendBuffer(const Command& cmd_struct) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    send_command_buffer_.emplace_back(cmd_struct);
+}
+
 void TCPConnection::SendData() {
     size_t num_bytes = 0;
-    while (!send_command_buffer_.empty()) {
+    while (DataInSendBuffer()) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        // Construct the TCP packet which will be deserialized and sent.
         TCPProtocol packet(send_command_buffer_.front().command,
                            send_command_buffer_.front().arguments.size()); // cmd, vec.size
         packet.arguments = std::move(send_command_buffer_.front().arguments);
         std::vector<uint8_t> buffer = packet.Serialize();
         num_bytes += asio::write(socket_, asio::buffer(buffer));
-
         send_command_buffer_.pop_front();
     }
     std::cout << "Sent Bytes: " << num_bytes << std::endl;
