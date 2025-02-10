@@ -37,7 +37,8 @@ public:
         kPrepareRestart = 4,
         kRestart = 5,
         kPrepareShutdown = 6,
-        kShutdown = 7
+        kShutdown = 7,
+        kInvalid = UINT16_MAX
     };
 
     // Constructor

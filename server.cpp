@@ -94,7 +94,6 @@ int main() {
                     std::cerr << "Invalid input." << std::endl;
             }
         }
-
         io_context.stop();
         io_thread.join();
     } catch (const std::exception& e) {

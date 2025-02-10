@@ -50,12 +50,12 @@ int main() {
     try {
         asio::io_context io_context;
         std::cout << "Starting client..." << std::endl;
-        TCPConnection server(io_context, "127.0.0.1", 12345, false);
+        TCPConnection client(io_context, "127.0.0.1", 12345, false);
         std::cout << "Starting IO Context..." << std::endl;
 
         std::thread io_thread([&]() { io_context.run(); });
 
-        while (true) {
+        while (client.getSocketIsOpen()) {
             PrintState();
             int input = GetUserInput();
 
@@ -71,12 +71,12 @@ int main() {
                     std::cout << "Enter Arg: \n";
                     std::vector<int> args = GetUserInputList();
                     std::cout << "Sending command" << std::endl;
-                    server.WriteSendBuffer(cmd, args);
+                    client.WriteSendBuffer(cmd, args);
                     break;
                 }
                 case 1: {
                     std::cout << "Receiving command" << std::endl;
-                    Command cmd = server.ReadRecvBuffer();
+                    Command cmd = client.ReadRecvBuffer();
                     std::cout << "******************************" << std::endl;
                     std::cout << "Command: " << static_cast<uint16_t>(cmd.command) << std::endl;
                     for (auto &arg : cmd.arguments) {std::cout << arg << std::endl;}
@@ -85,7 +85,7 @@ int main() {
                 }
                 case 2: {
                     std::cout << "Receiving All command" << std::endl;
-                    std::vector<Command> cmd_vec = server.ReadRecvBuffer(10000);
+                    std::vector<Command> cmd_vec = client.ReadRecvBuffer(10000);
                     std::cout << "******************************" << std::endl;
                     for (auto &cmd : cmd_vec) {
                         std::cout << " -- Command: " << static_cast<uint16_t>(cmd.command) << std::endl;
@@ -98,7 +98,6 @@ int main() {
                   std::cerr << "Invalid input." << std::endl;
             }
         }
-
         io_context.stop();
         io_thread.join();
     } catch (const std::exception& e) {

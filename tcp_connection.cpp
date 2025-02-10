@@ -4,7 +4,9 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     const short port, const bool is_server)
     : endpoint_(asio::ip::make_address(ip_address), port),
       socket_(io_context),
-      port_(port) {
+      port_(port),
+      client_connected_(false),
+      timeout_(io_context){
 
     read_state_ = kHeader;
     if (is_server) {
@@ -16,6 +18,19 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     else {
         std::cout << "Starting Client on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
         StartClient();
+    }
+}
+
+TCPConnection::~TCPConnection() {
+    std::cout << "Closing connections ..." << std::endl;
+    if (socket_.is_open()) {
+        socket_.close();
+    }
+    if (acceptor_ && acceptor_->is_open()) {
+        acceptor_->close();
+    }
+    if (accept_socket_ && accept_socket_->is_open()) {
+        accept_socket_->close();
     }
 }
 
@@ -31,11 +46,23 @@ void TCPConnection::StartServer() {
 }
 
 void TCPConnection::StartClient() {
+    // Set up a timeout (e.g., 3 seconds)
+    timeout_.expires_after(std::chrono::seconds(3));
+    timeout_.async_wait([this](const asio::error_code& ec) {
+        if (!ec) { // Timeout expired
+            std::cerr << "Connection timed out.\n";
+            socket_.cancel();  // Force async_connect to fail
+            socket_.close();
+        }
+    });
+
     socket_.async_connect(endpoint_,
     [this](const asio::error_code& ec) {
         if (!ec) {
+            timeout_.cancel();
             std::cout << "Connected to server!" << std::endl;
             std::thread(&TCPConnection::ReadWriteHandler, this).detach();
+            client_connected_ = true;
         } else {
             std::cerr << "Connection failed: " << ec.message() << std::endl;
         }
@@ -137,6 +164,7 @@ bool TCPConnection::DataInRecvBuffer() {
 
 Command TCPConnection::ReadRecvBuffer() {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (recv_command_buffer_.empty()) return {TCPProtocol::CommandCodes::kInvalid,0};
     Command command = recv_command_buffer_.front();
     recv_command_buffer_.pop_front();
     return command;
