@@ -99,6 +99,7 @@ int main() {
             }
         }
 
+        io_context.stop();
         io_thread.join();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

@@ -52,14 +52,13 @@ void TCPConnection::ReadWriteHandler() {
 
 size_t TCPConnection::ReadHandler(size_t read_bytes) {
     size_t num_bytes = read(socket_, asio::buffer(buffer_, read_bytes));
-    std::cout << "nBytes" << num_bytes << std::endl;
     return num_bytes;
 }
 
 void TCPConnection::ReadData() {
     std::cout << "Read Data!" << std::endl;
 
-    bool debug = true;
+    bool debug = false;
     uint16_t command_code = 0;
     uint16_t arg_count = 0;
     uint16_t crc = 0;
@@ -71,7 +70,6 @@ void TCPConnection::ReadData() {
             case kHeader: {
                 complete_packet = false;
                 num_bytes = 0;
-                std::cout << "CState" << read_state_ << std::endl;
                 num_bytes += ReadHandler(TCPProtocol::getHeaderSize());
                 auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
                 if (!TCPProtocol::GoodStartCode(header->start_code1, header->start_code2)) {
@@ -85,7 +83,6 @@ void TCPConnection::ReadData() {
                 break;
             }
             case kArgs: {
-                std::cout << "CState" << read_state_ << std::endl;
                 num_bytes += ReadHandler(arg_count * sizeof(int32_t));
                 auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -96,7 +93,6 @@ void TCPConnection::ReadData() {
                 break;
             }
             case kFooter: {
-                std::cout << "CState" << read_state_ << std::endl;
                 ReadHandler(TCPProtocol::getFooterSize());
                 auto *footer = reinterpret_cast<TCPProtocol::Footer *>(&buffer_);
                 crc = footer->crc;
