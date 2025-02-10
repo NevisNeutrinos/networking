@@ -5,14 +5,13 @@ To build client and server,
 mkdir build && cmake -B build && cd build && make
 ```
 
-As of now, the client sends data to the server which 
-echos it back to the client. The IP address and port 
-are hardcoded in the server.cpp and client.cpp
+For now commands and arguements can be sent between the client and server.
+The IP address and port are hardcoded in the server.cpp and client.cpp
 
 Client:
 Connects to a server running at given IP and port.
 ```c++
-socket.connect(tcp::endpoint(asio::ip::make_address("127.0.0.1"), 12345));
+TCPConnection server(io_context, "127.0.0.1", 12345, false);
 ```
 
 Server: 
@@ -22,20 +21,33 @@ TCPConnection server(io_context, "127.0.0.1", 12345, true);
 ```
 
 After building the server `GramsReadoutConnect` can be started, 
-followed by the client `GramsReadoutClient`. The client will 
-ask for an integer which, after being entered, will be sent 
-and echoed back from the server. The last arg should be the
-one entered, the command and other args are hardcoded for now.
+followed by the client `GramsReadoutClient`. Both client and server have a 
+menu where you can either send or read commands.
+```
+Select a command:
+  [0] Send Cmd
+  [1] Read Cmd
+  [2] Read All Cmd
+  [-1] Exit
+Enter choice:
+```
 
+If option `[0]` is selected it is followed by the prompt to enter a command, 
+followed by a prompt for a space separated list of arguements.
 ```
-********************************
-Start Code 1: 0xeb90 
-Start Code 2: 0x5b6a 
-Command:      42 
-NArgs:        5 
-Args:  10 20 30 40 45
-CRC:          11828 
-End Code 1:   0xc5a4 
-End Code 2:   0xd279
-********************************
+Enter Cmd:  4
+Enter Arg: 
+Enter numbers in one line: 942 832 95
 ```
+
+Option `[1]` reads out a single command from the bufffer with its associated
+arguements while `[2]` reads out all commands in the buffer.
+```
+******************************
+ -- Command: 4
+942
+832
+95
+******************************
+```
+
