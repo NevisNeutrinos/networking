@@ -1,5 +1,11 @@
 # networking
 
+Code dependencies:
+* ASIO >= 1.29.0
+* Cmake >= 3.16.3
+
+---
+
 To build client and server,
 ```
 mkdir build && cmake -B build && cd build && make
