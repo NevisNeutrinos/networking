@@ -23,8 +23,6 @@ private:
     static constexpr size_t header_size_ = 8;
     static constexpr size_t footer_size_ = 6;
 
-    static uint16_t CalcCRC() { return kStartCode1 ^ kEndCode1; }
-
 public:
 
     // These are the codes which will be sent
@@ -67,6 +65,9 @@ public:
         uint16_t end_code2;
     };
 
+    static uint16_t CalcCRC(std::vector<uint8_t> &pbuffer, uint16_t crc = 0);
+    static uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc = 0);
+
     static uint16_t getHeaderSize() { return header_size_; }
     static uint16_t getFooterSize() { return footer_size_; }
     static bool GoodStartCode(const uint16_t code1, const uint16_t code2) {
@@ -76,7 +77,7 @@ public:
         return code1 == kEndCode1 && code2 == kEndCode2;
     }
 
-    std::vector<uint8_t> Serialize() const;
+    std::vector<uint8_t> Serialize();
     void print();
 
 };

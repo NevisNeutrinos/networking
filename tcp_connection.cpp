@@ -22,7 +22,10 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
 }
 
 TCPConnection::~TCPConnection() {
-    std::cout << "Closing connections ..." << std::endl;
+    std::cout << "Clearing buffers and closing connections ..." << std::endl;
+    send_command_buffer_.clear();
+    recv_command_buffer_.clear();
+
     if (socket_.is_open()) {
         socket_.close();
     }
@@ -86,9 +89,10 @@ void TCPConnection::ReadData() {
     std::cout << "Read Data!" << std::endl;
 
     bool debug = false;
+    std::vector<uint8_t> crc_buffer;
     uint16_t command_code = 0;
     uint16_t arg_count = 0;
-    uint16_t crc = 0;
+    uint16_t calc_crc = 0;
     size_t num_bytes = 0;
     bool complete_packet = false;
 
@@ -96,8 +100,8 @@ void TCPConnection::ReadData() {
         switch (read_state_) {
             case kHeader: {
                 complete_packet = false;
-                num_bytes = 0;
-                num_bytes += ReadHandler(TCPProtocol::getHeaderSize());
+                num_bytes = ReadHandler(TCPProtocol::getHeaderSize());
+                calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes);
                 auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
                 if (!TCPProtocol::GoodStartCode(header->start_code1, header->start_code2)) {
                     std::cerr << "Bad start code!" << std::endl;
@@ -110,7 +114,8 @@ void TCPConnection::ReadData() {
                 break;
             }
             case kArgs: {
-                num_bytes += ReadHandler(arg_count * sizeof(int32_t));
+                num_bytes = ReadHandler(arg_count * sizeof(int32_t));
+                calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes, calc_crc);
                 auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
                 std::lock_guard<std::mutex> lock(mutex_);
                 for (int i = 0; i < arg_count; i++) {
@@ -122,7 +127,9 @@ void TCPConnection::ReadData() {
             case kFooter: {
                 ReadHandler(TCPProtocol::getFooterSize());
                 auto *footer = reinterpret_cast<TCPProtocol::Footer *>(&buffer_);
-                crc = footer->crc;
+                if (footer->crc != calc_crc) {
+                    std::cerr << "Bad CRC! Received [" << footer->crc << "] Calculated [" << calc_crc << "]"  << std::endl;
+                }
                 if(!TCPProtocol::GoodEndCode(footer->end_code1, footer->end_code2)) {
                     std::cerr << "Bad end code!" << std::endl;
                 }
