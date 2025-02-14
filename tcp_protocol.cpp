@@ -14,9 +14,9 @@ TCPProtocol::TCPProtocol(const CommandCodes cmd, const size_t vec_size) : comman
     end_code2 = kEndCode2;
 }
 
-uint16_t TCPProtocol::CalcCRC(std::vector<uint8_t>& pbuffer, uint16_t crc) {
-    for (const unsigned char i : pbuffer) {
-        crc ^= i;
+uint16_t TCPProtocol::CalcCRC(std::vector<uint8_t>& pbuffer, size_t num_bytes, uint16_t crc) {
+    for (size_t i = 0; i < num_bytes; i++) {
+        crc ^= pbuffer.at(i);
         for (int j = 0; j < 8; j++) {
             if (crc & 1) { crc = (crc >> 1) ^ 0x8408; }
             else { crc >>= 1; }
@@ -40,7 +40,8 @@ std::vector<uint8_t> TCPProtocol::Serialize() {
     std::vector<uint8_t> buffer;
     std::cout << "Serialize nArgs: " << arguments.size() << std::endl;
     // Header + arguments + footer
-    buffer.resize(header_size_ + arguments.size() * sizeof(int32_t) + footer_size_);
+    size_t header_content_bytes = header_size_ + arguments.size() * sizeof(int32_t);
+    buffer.resize(header_content_bytes + footer_size_);
 
     size_t offset = 0;
     auto Append = [&](const void* data, size_t size) {
@@ -53,7 +54,7 @@ std::vector<uint8_t> TCPProtocol::Serialize() {
     Append(&command_code, sizeof(command_code));
     Append(&arg_count, sizeof(arg_count));
     for (int32_t arg : arguments) Append(&arg, sizeof(arg));
-    crc = CalcCRC(buffer);
+    crc = CalcCRC(buffer, header_content_bytes);
     Append(&crc, sizeof(crc));
     Append(&end_code1, sizeof(end_code1));
     Append(&end_code2, sizeof(end_code2));
