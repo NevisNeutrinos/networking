@@ -6,7 +6,8 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       socket_(io_context),
       port_(port),
       client_connected_(false),
-      timeout_(io_context){
+      timeout_(io_context),
+      stop_cmd_read_(false) {
 
     read_state_ = kHeader;
     if (is_server) {
@@ -142,7 +143,7 @@ void TCPConnection::ReadData() {
             }
             case kEndRecv: {
                 // std::lock_guard<std::mutex> lock(mutex_);
-                std::cout << "Cmd: " << static_cast<uint16_t>(recv_command_buffer_.back().command) << std::endl;
+                std::cout << "Cmd: " << recv_command_buffer_.back().command << std::endl;
                 std::cout << "Num Args: " << recv_command_buffer_.back().arguments.size() << std::endl;
                 std::cout << "Args: ";
                 for (auto &arg : recv_command_buffer_.back().arguments) {
@@ -173,7 +174,10 @@ bool TCPConnection::DataInRecvBuffer() {
 
 Command TCPConnection::ReadRecvBuffer() {
     std::unique_lock<std::mutex> cmd_lock(mutex_);
-    cmd_available_.wait(cmd_lock, [this] { return !recv_command_buffer_.empty(); });
+    cmd_available_.wait(cmd_lock, [this] {
+        return !recv_command_buffer_.empty() || stop_cmd_read_;
+    });
+    if (stop_cmd_read_) return Command(0, 0);
     Command command = recv_command_buffer_.front();
     recv_command_buffer_.pop_front();
     return command;
@@ -209,7 +213,7 @@ void TCPConnection::EchoData() {
     }
 }
 
-void TCPConnection::WriteSendBuffer(TCPProtocol::CommandCodes cmd, std::vector<int32_t>& vec) {
+void TCPConnection::WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec) {
     std::lock_guard<std::mutex> lock(mutex_);
     send_command_buffer_.emplace_back(cmd, vec.size());
     send_command_buffer_.back().arguments = std::move(vec);

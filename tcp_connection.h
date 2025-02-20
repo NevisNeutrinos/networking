@@ -19,13 +19,17 @@ public:
     std::deque<Command> recv_command_buffer_;
 
     // Interface to send/receive commands and data
-    void WriteSendBuffer(TCPProtocol::CommandCodes cmd, std::vector<int32_t>& vec);
+    void WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec);
     void WriteSendBuffer(const Command& cmd_struct);
 
     Command ReadRecvBuffer();
     std::vector<Command> ReadRecvBuffer(size_t num_cmds);
 
-    bool getSocketIsOpen() const { return socket_.is_open(); };
+    bool getSocketIsOpen() const { return socket_.is_open(); }
+    void setStopCmdRead(const bool stop_read) {
+        stop_cmd_read_ = stop_read;
+        cmd_available_.notify_all();
+    }
 
 private:
     std::optional<tcp::acceptor> acceptor_;
@@ -36,6 +40,7 @@ private:
     short port_;
     bool client_connected_;
     asio::steady_timer timeout_;
+    std::atomic_bool stop_cmd_read_;
 
     std::mutex mutex_;
 

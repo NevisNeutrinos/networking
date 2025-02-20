@@ -5,7 +5,6 @@
 #include "tcp_connection.h"
 #include <iostream>
 
-typedef TCPProtocol::CommandCodes Cmd;
 
 void PrintState() {
     std::cout << "Select a command:\n";
@@ -67,7 +66,7 @@ int main() {
             switch (input) {
                 case 0: {
                     std::cout << "Enter Cmd:  ";
-                    auto cmd = static_cast<Cmd>(GetUserInput());
+                    auto cmd = static_cast<uint16_t>(GetUserInput());
                     std::cout << "Enter Arg: \n";
                     std::vector<int> args = GetUserInputList();
                     std::cout << "Sending command" << std::endl;
@@ -78,7 +77,7 @@ int main() {
                     std::cout << "Receiving command" << std::endl;
                     Command cmd = client.ReadRecvBuffer();
                     std::cout << "******************************" << std::endl;
-                    std::cout << "Command: " << static_cast<uint16_t>(cmd.command) << std::endl;
+                    std::cout << "Command: " << cmd.command << std::endl;
                     for (auto &arg : cmd.arguments) {std::cout << arg << std::endl;}
                     std::cout << "******************************" << std::endl;
                     break;
@@ -88,7 +87,7 @@ int main() {
                     std::vector<Command> cmd_vec = client.ReadRecvBuffer(10000);
                     std::cout << "******************************" << std::endl;
                     for (auto &cmd : cmd_vec) {
-                        std::cout << " -- Command: " << static_cast<uint16_t>(cmd.command) << std::endl;
+                        std::cout << " -- Command: " << cmd.command << std::endl;
                         for (auto &arg : cmd.arguments) {std::cout << arg << std::endl;}
                     }
                     std::cout << "******************************" << std::endl;
