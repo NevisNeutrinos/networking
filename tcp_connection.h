@@ -58,6 +58,10 @@ private:
 
     ReadStates read_state_;
 
+    // Creates a blocking wait for commands to
+    // become available in the buffer.
+    std::condition_variable cmd_available_;
+
 };
 
 #endif  // TCP_SERVER_H_

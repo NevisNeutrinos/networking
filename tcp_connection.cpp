@@ -96,6 +96,7 @@ void TCPConnection::ReadData() {
     size_t num_bytes = 0;
     bool complete_packet = false;
 
+    // TODO: add timeout so we don't get stuck waiting for a potentially failed packet.
     while (!complete_packet) {
         switch (read_state_) {
             case kHeader: {
@@ -136,6 +137,7 @@ void TCPConnection::ReadData() {
                 std::cout << "Received all data!" << std::endl;
                 read_state_ = debug ? kEndRecv : kHeader;
                 complete_packet = !debug;
+                cmd_available_.notify_all();
                 break;
             }
             case kEndRecv: {
@@ -170,27 +172,30 @@ bool TCPConnection::DataInRecvBuffer() {
 }
 
 Command TCPConnection::ReadRecvBuffer() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (recv_command_buffer_.empty()) return {TCPProtocol::CommandCodes::kInvalid,0};
+    std::unique_lock<std::mutex> cmd_lock(mutex_);
+    cmd_available_.wait(cmd_lock, [this] { return !recv_command_buffer_.empty(); });
     Command command = recv_command_buffer_.front();
     recv_command_buffer_.pop_front();
     return command;
 }
 
 std::vector<Command> TCPConnection::ReadRecvBuffer(size_t num_cmds) {
-    std::vector<Command> commands;
-    commands.reserve(num_cmds);
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(mutex_);
+    size_t buffer_size = recv_command_buffer_.size();
+    lock.unlock();
 
-    size_t num_reads = num_cmds > recv_command_buffer_.size() ? recv_command_buffer_.size() : num_cmds;
-    if (num_cmds > recv_command_buffer_.size()) {
-        std::cout << "Requested commands larger than buffer size, just reading whole buffer: "
+    size_t num_reads = num_cmds;
+    if (num_cmds > buffer_size) {
+        num_reads = buffer_size;
+        std::cout << "Requested commands larger than buffer size, reading entire buffer: "
         << num_reads << std::endl;
     }
 
+    std::vector<Command> commands;
+    commands.reserve(num_reads);
+
     for (size_t i = 0; i < num_reads; i++) {
-        commands.push_back(std::move(recv_command_buffer_.front()));
-        recv_command_buffer_.pop_front();
+        commands.push_back(ReadRecvBuffer());
     }
     return commands;
 }
