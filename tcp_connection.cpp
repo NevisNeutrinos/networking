@@ -105,12 +105,12 @@ void TCPConnection::ReadData() {
                 num_bytes = ReadHandler(TCPProtocol::getHeaderSize());
                 calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes);
                 auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
-                if (!TCPProtocol::GoodStartCode(header->start_code1, header->start_code2)) {
+                if (!TCPProtocol::GoodStartCode(ntohs(header->start_code1), ntohs(header->start_code2))) {
                     std::cerr << "Bad start code!" << std::endl;
                 }
-                arg_count = header->arg_count;
+                arg_count = ntohs(header->arg_count);
                 std::lock_guard<std::mutex> lock(mutex_);
-                recv_command_buffer_.emplace_back(header->cmd_code, header->arg_count);
+                recv_command_buffer_.emplace_back(ntohs(header->cmd_code), ntohs(header->arg_count));
                 std::cout << "NArgs: " << arg_count << std::endl;
                 read_state_ = kArgs;
                 break;
@@ -121,7 +121,7 @@ void TCPConnection::ReadData() {
                 auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
                 std::lock_guard<std::mutex> lock(mutex_);
                 for (int i = 0; i < arg_count; i++) {
-                    recv_command_buffer_.back().arguments[i] = buf_ptr_32[i];
+                    recv_command_buffer_.back().arguments[i] = ntohl(buf_ptr_32[i]);
                 }
                 read_state_ = kFooter;
                 break;
@@ -129,10 +129,10 @@ void TCPConnection::ReadData() {
             case kFooter: {
                 ReadHandler(TCPProtocol::getFooterSize());
                 auto *footer = reinterpret_cast<TCPProtocol::Footer *>(&buffer_);
-                if (footer->crc != calc_crc) {
-                    std::cerr << "Bad CRC! Received [" << footer->crc << "] Calculated [" << calc_crc << "]"  << std::endl;
+                if (ntohs(footer->crc) != calc_crc) {
+                    std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc << "]"  << std::endl;
                 }
-                if(!TCPProtocol::GoodEndCode(footer->end_code1, footer->end_code2)) {
+                if(!TCPProtocol::GoodEndCode(ntohs(footer->end_code1), ntohs(footer->end_code2))) {
                     std::cerr << "Bad end code!" << std::endl;
                 }
                 std::cout << "Received all data!" << std::endl;

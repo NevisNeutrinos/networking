@@ -4,6 +4,8 @@
 
 #include "tcp_protocol.h"
 
+#include <netinet/in.h>
+
 TCPProtocol::TCPProtocol(const uint16_t cmd, const size_t vec_size) : command_code(cmd),
                                                                       arg_count(vec_size),
                                                                       arguments(vec_size) {
@@ -48,16 +50,26 @@ std::vector<uint8_t> TCPProtocol::Serialize() {
         std::memcpy(buffer.data() + offset, data, size);
         offset += size;
     };
-
-    Append(&start_code1, sizeof(start_code1));
-    Append(&start_code2, sizeof(start_code2));
-    Append(&command_code, sizeof(command_code));
-    Append(&arg_count, sizeof(arg_count));
-    for (int32_t arg : arguments) Append(&arg, sizeof(arg));
+    uint16_t tmp16 = htons(start_code1);
+    Append(&tmp16, sizeof(start_code1));
+    tmp16 = htons(start_code2);
+    Append(&tmp16, sizeof(start_code2));
+    tmp16 = htons(command_code);
+    Append(&tmp16, sizeof(command_code));
+    tmp16 = htons(arg_count);
+    Append(&tmp16, sizeof(arg_count));
+    uint32_t tmp32;
+    for (int32_t arg : arguments) {
+        tmp32 = htonl(arg);
+        Append(&tmp32, sizeof(arg));
+    }
     crc = CalcCRC(buffer, header_content_bytes);
-    Append(&crc, sizeof(crc));
-    Append(&end_code1, sizeof(end_code1));
-    Append(&end_code2, sizeof(end_code2));
+    tmp16 = htons(crc);
+    Append(&tmp16, sizeof(crc));
+    tmp16 = htons(end_code1);
+    Append(&tmp16, sizeof(end_code1));
+    tmp16 = htons(end_code2);
+    Append(&tmp16, sizeof(end_code2));
 
     std::cout << "buffer.size() " << buffer.size() << std::endl;
 
