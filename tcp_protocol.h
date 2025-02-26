@@ -12,7 +12,7 @@
 
 class TCPProtocol {
 
-private:
+public:
 
     // Constants
     static constexpr uint16_t kStartCode1 = 0xEB90;
@@ -22,8 +22,6 @@ private:
 
     static constexpr size_t header_size_ = 8;
     static constexpr size_t footer_size_ = 6;
-
-public:
 
     // Constructor
     TCPProtocol(uint16_t cmd, size_t vec_size);

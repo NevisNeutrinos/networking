@@ -38,3 +38,8 @@ add_executable(GramsReadoutConnect server.cpp
 target_compile_definitions(GramsReadoutConnect PRIVATE ASIO_STANDALONE)
 target_include_directories(GramsReadoutConnect PRIVATE ${ASIO_INCLUDE_DIR})
 target_link_libraries(GramsReadoutConnect PRIVATE pthread)
+
+set(COMPILE_UNIT_TESTS FALSE)
+if(COMPILE_UNIT_TESTS)
+    add_subdirectory(unit_test)
+endif()

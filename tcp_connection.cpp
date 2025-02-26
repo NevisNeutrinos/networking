@@ -173,18 +173,18 @@ bool TCPConnection::DataInRecvBuffer() {
 }
 
 Command TCPConnection::ReadRecvBuffer() {
-    std::unique_lock<std::mutex> cmd_lock(mutex_);
+    std::unique_lock cmd_lock(mutex_);
     cmd_available_.wait(cmd_lock, [this] {
         return !recv_command_buffer_.empty() || stop_cmd_read_;
     });
-    if (stop_cmd_read_) return Command(0, 0);
+    if (stop_cmd_read_) return {0, 0};
     Command command = recv_command_buffer_.front();
     recv_command_buffer_.pop_front();
     return command;
 }
 
 std::vector<Command> TCPConnection::ReadRecvBuffer(size_t num_cmds) {
-    std::unique_lock<std::mutex> lock(mutex_);
+    std::unique_lock lock(mutex_);
     size_t buffer_size = recv_command_buffer_.size();
     lock.unlock();
 

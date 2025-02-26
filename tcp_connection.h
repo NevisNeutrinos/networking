@@ -4,7 +4,8 @@
 #include <iostream>
 #include <asio.hpp>
 #include <deque>
-
+#include <optional>
+#include <condition_variable>
 #include "tcp_protocol.h"
 
 using asio::ip::tcp;
@@ -64,7 +65,7 @@ private:
     ReadStates read_state_;
 
     // Creates a blocking wait for commands to
-    // become available in the buffer.
+    // become available in the read buffer.
     std::condition_variable cmd_available_;
 
 };
