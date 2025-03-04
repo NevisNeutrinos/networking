@@ -105,7 +105,7 @@ void TCPConnection::ReadData() {
                 num_bytes = ReadHandler(TCPProtocol::getHeaderSize());
                 calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes);
                 auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
-                if (!TCPProtocol::GoodStartCode(ntohs(header->start_code1), ntohs(header->start_code2))) {
+                if (!TCPProtocol::GoodStartCode(header->start_code1, header->start_code2)) {
                     std::cerr << "Bad start code!" << std::endl;
                 }
                 arg_count = ntohs(header->arg_count);
@@ -132,7 +132,7 @@ void TCPConnection::ReadData() {
                 if (ntohs(footer->crc) != calc_crc) {
                     std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc << "]"  << std::endl;
                 }
-                if(!TCPProtocol::GoodEndCode(ntohs(footer->end_code1), ntohs(footer->end_code2))) {
+                if(!TCPProtocol::GoodEndCode(footer->end_code1, footer->end_code2)) {
                     std::cerr << "Bad end code!" << std::endl;
                 }
                 std::cout << "Received all data!" << std::endl;

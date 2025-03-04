@@ -9,6 +9,7 @@
 #include <cstring>  // memcpy
 #include <iostream>
 #include <vector>
+#include <netinet/in.h>
 
 class TCPProtocol {
 
