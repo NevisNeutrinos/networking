@@ -48,9 +48,10 @@ std::vector<uint8_t> TCPProtocol::Serialize() {
         std::memcpy(buffer.data() + offset, data, size);
         offset += size;
     };
-    uint16_t tmp16;
-    Append(&start_code1, sizeof(start_code1));
-    Append(&start_code2, sizeof(start_code2));
+    uint16_t tmp16 = htons(start_code1);
+    Append(&tmp16, sizeof(start_code1));
+    tmp16 = htons(start_code2);
+    Append(&tmp16, sizeof(start_code2));
     tmp16 = htons(command_code);
     Append(&tmp16, sizeof(command_code));
     tmp16 = htons(arg_count);
@@ -63,8 +64,10 @@ std::vector<uint8_t> TCPProtocol::Serialize() {
     crc = CalcCRC(buffer, header_content_bytes);
     tmp16 = htons(crc);
     Append(&tmp16, sizeof(crc));
-    Append(&end_code1, sizeof(end_code1));
-    Append(&end_code2, sizeof(end_code2));
+    tmp16 = htons(end_code1);
+    Append(&tmp16, sizeof(end_code1));
+    tmp16 = htons(end_code2);
+    Append(&tmp16, sizeof(end_code2));
 
     std::cout << "buffer.size() " << buffer.size() << std::endl;
 
