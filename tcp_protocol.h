@@ -15,11 +15,11 @@ class TCPProtocol {
 
 public:
 
-    // Constants (little endian format)
-    static constexpr uint16_t kStartCode1 = 0x90EB; // BE 0xEB90
-    static constexpr uint16_t kStartCode2 = 0x6A5B; // BE 0x5B6A
-    static constexpr uint16_t kEndCode1 = 0xA4C5;   // BE 0xC5A4
-    static constexpr uint16_t kEndCode2 = 0x79D2;   // BE 0xD279
+    // Constants for start and end codes
+    static constexpr uint16_t kStartCode1 = 0xEB90; // BE 0xEB90 LE 0x90EB
+    static constexpr uint16_t kStartCode2 = 0x5B6A; // BE 0x5B6A LE 0x6A5B
+    static constexpr uint16_t kEndCode1 = 0xC5A4;   // BE 0xC5A4 LE 0xA4C5
+    static constexpr uint16_t kEndCode2 = 0xD279;   // BE 0xD279 LE 0x79D2
 
     static constexpr size_t header_size_ = 8;
     static constexpr size_t footer_size_ = 6;
