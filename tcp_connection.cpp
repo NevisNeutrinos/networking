@@ -7,13 +7,22 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       port_(port),
       client_connected_(false),
       timeout_(io_context),
-      stop_cmd_read_(false) {
+      stop_cmd_read_(false),
+      stop_server_(false) {
 
     read_state_ = kHeader;
     if (is_server) {
         std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
+        std::cout << "PRE Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
         acceptor_.emplace(tcp::acceptor(io_context, endpoint_));
+        if (!acceptor_.has_value()) {
+            std::cerr << "Acceptor is not initialized!" << std::endl;
+        }
         accept_socket_.emplace(io_context);
+        if (!accept_socket_.has_value()) {
+            std::cerr << "Accept Socket is not initialized!" << std::endl;
+        }
+        std::cout << "Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
         StartServer();
     }
     else {
@@ -23,29 +32,38 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
 }
 
 TCPConnection::~TCPConnection() {
-    std::cout << "Clearing buffers and closing connections ..." << std::endl;
+    // Stop the server from accepting new connections
+    stop_server_.store(true);
+
+    std::cout << "Clearing TCP buffers and closing connections ..." << std::endl;
     send_command_buffer_.clear();
     recv_command_buffer_.clear();
 
     if (socket_.is_open()) {
+        socket_.cancel();
         socket_.close();
+        std::cout << "Closed server socket" << std::endl;
     }
-    if (acceptor_ && acceptor_->is_open()) {
-        acceptor_->close();
-    }
-    if (accept_socket_ && accept_socket_->is_open()) {
+    // This should never be open since it is std::move() to socket_
+    if (accept_socket_->is_open() && false) {
+        accept_socket_->cancel();
         accept_socket_->close();
+        std::cout << "Closed client socket" << std::endl;
     }
+    std::cout << "Destructed TCP connection" << std::endl;
 }
 
 void TCPConnection::StartServer() {
+    if (stop_server_.load()) return;
     acceptor_->async_accept(*accept_socket_, [this](std::error_code ec) {
       if (!ec) {
         std::cout << "New client connected!" << std::endl;
           socket_ = std::move(*accept_socket_);
           std::thread(&TCPConnection::ReadWriteHandler, this).detach();
+      } else {
+          std::cerr << "Client connection failed with error: " << ec.message() << std::endl;
       }
-      StartServer();  // Accept the next client
+      if (!stop_server_.load()) StartServer();  // Accept the next client
     });
 }
 
@@ -74,7 +92,7 @@ void TCPConnection::StartClient() {
 }
 
 void TCPConnection::ReadWriteHandler() {
-    while (socket_.is_open()) {
+    while (!stop_server_.load() && socket_.is_open()) {
         if (socket_.available()) ReadData();
         if (DataInSendBuffer()) SendData();
         usleep(50000);

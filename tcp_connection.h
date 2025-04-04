@@ -42,6 +42,7 @@ private:
     bool client_connected_;
     asio::steady_timer timeout_;
     std::atomic_bool stop_cmd_read_;
+    std::atomic_bool stop_server_;
 
     std::mutex mutex_;
 
