@@ -2,7 +2,8 @@
 
 TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip_address,
     const short port, const bool is_server)
-    : endpoint_(asio::ip::make_address(ip_address), port),
+    : tcp_protocol_(0,0),
+      endpoint_(asio::ip::make_address(ip_address), port),
       socket_(io_context),
       port_(port),
       client_connected_(false),
@@ -10,7 +11,10 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       stop_cmd_read_(false),
       stop_server_(false) {
 
-    read_state_ = kHeader;
+    // Make sure the decoder is ready for the first packet
+    requested_bytes_ = sizeof(TCPProtocol::Header);
+    tcp_protocol_.RestartDecoder();
+
     if (is_server) {
         std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
         std::cout << "PRE Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
@@ -92,92 +96,155 @@ void TCPConnection::StartClient() {
 }
 
 void TCPConnection::ReadWriteHandler() {
+    // We will use this clock for time-outs
+    chrono_read_start_= std::chrono::high_resolution_clock::now();
+
     while (!stop_server_.load() && socket_.is_open()) {
-        if (socket_.available()) ReadData();
+        if (socket_.available()) ReadHandler();
         if (DataInSendBuffer()) SendData();
         usleep(50000);
     }
 }
 
-size_t TCPConnection::ReadHandler(size_t read_bytes) {
-    size_t num_bytes = read(socket_, asio::buffer(buffer_, read_bytes));
-    return num_bytes;
+void TCPConnection::ReadHandler() {
+
+    constexpr auto read_timeout = std::chrono::seconds(5);
+
+    // If reading the requested bytes takes >5s, the read times out and returns an error.
+    // If no other errors interrupt, the loop will spin waiting for the requested bytes to be read
+    // while (!stop_server_.load() && socket_.is_open() && requested_bytes > received_bytes && !error) {
+    // FIXME what happens if there is an error in the middle of the packet?? How do we find our way back?
+    async_read(socket_, asio::buffer(buffer_, requested_bytes_), [&](const asio::error_code& ec, size_t bytes_transferred)  {
+        if (ec) {
+            std::cerr << "Read error: " << ec.message() << "\n";
+            read_error_ = ec;
+        } else {
+            received_bytes_ = bytes_transferred;
+        }
+    });
+
+    // Check the elapsed time to catch timeouts
+    auto elapsed_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::high_resolution_clock::now() - chrono_read_start_);
+    if (elapsed_time > read_timeout) {
+        std::cerr << "Read timed out, assuming packet is lost forever! \n";
+        // Reset things and wait for new packet
+        requested_bytes_ = sizeof(TCPProtocol::Header);
+        chrono_read_start_= std::chrono::high_resolution_clock::now();
+        tcp_protocol_.RestartDecoder();
+    }
+
+    // If the requested data was read from the socket we can decode it
+    if (received_bytes_ == requested_bytes_) {
+        // The DecodePackets uses an internal state machine to iterate through the packet eg, Header, Payload, Footer
+        // Returns 0 when the end of the packet frame is reached
+        std::lock_guard<std::mutex> lock(mutex_);
+        requested_bytes_ = tcp_protocol_.DecodePackets(buffer_, recv_command_buffer_);
+        mutex_.unlock();
+        if (requested_bytes_ == 0) {
+            requested_bytes_ = sizeof(TCPProtocol::Header);
+            chrono_read_start_= std::chrono::high_resolution_clock::now();
+        }
+    }
 }
 
 void TCPConnection::ReadData() {
-    std::cout << "Read Data!" << std::endl;
 
-    bool debug = false;
-    std::vector<uint8_t> crc_buffer;
-    uint16_t command_code = 0;
-    uint16_t arg_count = 0;
-    uint16_t calc_crc = 0;
-    size_t num_bytes = 0;
+    // Always start by reading a header
+    size_t num_bytes = sizeof(TCPProtocol::Header);
     bool complete_packet = false;
 
-    // TODO: add timeout so we don't get stuck waiting for a potentially failed packet.
-    while (!complete_packet) {
-        switch (read_state_) {
-            case kHeader: {
-                complete_packet = false;
-                num_bytes = ReadHandler(TCPProtocol::getHeaderSize());
-                calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes);
-                auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
-                if (!TCPProtocol::GoodStartCode(ntohs(header->start_code1), ntohs(header->start_code2))) {
-                    std::cerr << "Bad start code!" << std::endl;
-                }
-                arg_count = ntohs(header->arg_count);
-                std::lock_guard<std::mutex> lock(mutex_);
-                recv_command_buffer_.emplace_back(ntohs(header->cmd_code), ntohs(header->arg_count));
-                std::cout << "NArgs: " << arg_count << std::endl;
-                read_state_ = kArgs;
-                break;
-            }
-            case kArgs: {
-                num_bytes = ReadHandler(arg_count * sizeof(int32_t));
-                calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes, calc_crc);
-                auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
-                std::lock_guard<std::mutex> lock(mutex_);
-                for (int i = 0; i < arg_count; i++) {
-                    recv_command_buffer_.back().arguments[i] = ntohl(buf_ptr_32[i]);
-                }
-                read_state_ = kFooter;
-                break;
-            }
-            case kFooter: {
-                ReadHandler(TCPProtocol::getFooterSize());
-                auto *footer = reinterpret_cast<TCPProtocol::Footer *>(&buffer_);
-                if (ntohs(footer->crc) != calc_crc) {
-                    std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc << "]"  << std::endl;
-                }
-                if(!TCPProtocol::GoodEndCode(ntohs(footer->end_code1), ntohs(footer->end_code2))) {
-                    std::cerr << "Bad end code!" << std::endl;
-                }
-                std::cout << "Received all data!" << std::endl;
-                read_state_ = debug ? kEndRecv : kHeader;
-                complete_packet = !debug;
-                cmd_available_.notify_all();
-                break;
-            }
-            case kEndRecv: {
-                // std::lock_guard<std::mutex> lock(mutex_);
-                std::cout << "Cmd: " << recv_command_buffer_.back().command << std::endl;
-                std::cout << "Num Args: " << recv_command_buffer_.back().arguments.size() << std::endl;
-                std::cout << "Args: ";
-                for (auto &arg : recv_command_buffer_.back().arguments) {
-                    std::cout << arg << " ";
-                }
-                std::cout << " " << std::endl;
-                // EchoData();
-                read_state_ = kHeader;
-                complete_packet = true;
-                break;
-            }
-            default: {
-                throw std::runtime_error("Invalid state");
-            }
-        }
+    // while (!stop_server_.load() && socket_.is_open()) {
+
+    // The Readhandler can fail from a socket error returned by the ASIO library OR a timeout.
+    // The read will time out if the requested bytes are not received within 5s,
+    // I think this is a generous timout length.
+    // if (!ReadHandler(num_bytes)) {
+    //     std::cerr << "Failed to read requested bytes: requested [" << num_bytes << "]" << std::endl;
+    //     // break;
+    //     // FIXME return error, drop packet
+    // }
+    std::lock_guard<std::mutex> lock(mutex_);
+    // The DecodePackets uses an internal state machine to iterate through the packet eg, Header, Payload, Footer
+    // Returns 0 when the end of the packet frame is reached
+    num_bytes = tcp_protocol_.DecodePackets(buffer_, recv_command_buffer_);
+    mutex_.unlock();
+    if (num_bytes == 0) {
+        complete_packet = true;
+        // break;
+        // FIXME return success
     }
+
+    // }
+
+    // Only notify the threads listening to the read buffer if a full packet has been read
+    if (complete_packet) cmd_available_.notify_all();
+
+    // while (!complete_packet) {
+    //     switch (read_state_) {
+    //         case kHeader: {
+    //             complete_packet = false;
+    //             num_bytes = ReadHandler(TCPProtocol::getHeaderSize());
+    //             calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes);
+    //             auto *header = reinterpret_cast<TCPProtocol::Header *>(&buffer_);
+    //             if (!TCPProtocol::GoodStartCode(ntohs(header->start_code1), ntohs(header->start_code2))) {
+    //                 std::cerr << "Bad start code!" << std::endl;
+    //             }
+    //             arg_count = ntohs(header->arg_count);
+    //             std::lock_guard<std::mutex> lock(mutex_);
+    //             recv_command_buffer_.emplace_back(ntohs(header->cmd_code), ntohs(header->arg_count));
+    //             std::cout << "NArgs: " << arg_count << std::endl;
+    //             read_state_ = kArgs;
+    //             break;
+    //         }
+    //         case kArgs: {
+    //             num_bytes = ReadHandler(arg_count * sizeof(int32_t));
+    //             calc_crc = TCPProtocol::CalcCRC(reinterpret_cast<uint8_t *>(&buffer_), num_bytes, calc_crc);
+    //             auto *buf_ptr_32 = reinterpret_cast<int32_t *>(&buffer_);
+    //             std::lock_guard<std::mutex> lock(mutex_);
+    //             for (int i = 0; i < arg_count; i++) {
+    //                 recv_command_buffer_.back().arguments[i] = ntohl(buf_ptr_32[i]);
+    //             }
+    //             read_state_ = kFooter;
+    //             break;
+    //         }
+    //         case kFooter: {
+    //             ReadHandler(TCPProtocol::getFooterSize());
+    //             auto *footer = reinterpret_cast<TCPProtocol::Footer *>(&buffer_);
+    //             if (ntohs(footer->crc) != calc_crc) {
+    //                 std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc << "]"  << std::endl;
+    //             }
+    //             if(!TCPProtocol::GoodEndCode(ntohs(footer->end_code1), ntohs(footer->end_code2))) {
+    //                 std::cerr << "Bad end code!" << std::endl;
+    //             }
+    //             std::cout << "Received all data!" << std::endl;
+    //             read_state_ = debug ? kEndRecv : kHeader;
+    //             complete_packet = !debug;
+    //             cmd_available_.notify_all();
+    //             break;
+    //         }
+    //         case kEndRecv: {
+    //             // std::lock_guard<std::mutex> lock(mutex_);
+    //             std::cout << "Cmd: " << recv_command_buffer_.back().command << std::endl;
+    //             std::cout << "Num Args: " << recv_command_buffer_.back().arguments.size() << std::endl;
+    //             std::cout << "Args: ";
+    //             for (auto &arg : recv_command_buffer_.back().arguments) {
+    //                 std::cout << arg << " ";
+    //             }
+    //             std::cout << " " << std::endl;
+    //             // EchoData();
+    //             read_state_ = kHeader;
+    //             complete_packet = true;
+    //             break;
+    //         }
+    //         default: {
+    //             throw std::runtime_error("Invalid state");
+    //         }
+    //     } // switch
+    // } // while reading packets
+
+    // This will always be true until a timeout is added
+    // if (complete_packet) cmd_available_.notify_all();
+
 }
 
 bool TCPConnection::DataInSendBuffer() {

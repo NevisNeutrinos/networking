@@ -11,6 +11,8 @@
 #include <vector>
 #include <netinet/in.h>
 
+class Command;
+
 class TCPProtocol {
 
 public:
@@ -62,8 +64,38 @@ public:
         return code1 == kEndCode1 && code2 == kEndCode2;
     }
 
+    // Start decoder waiting for a Header, can be called if packet is lost and we need to restart
+    inline void RestartDecoder() { decode_state_ = kHeader; }
+
+    constexpr static size_t RECVBUFFSIZE = 10000;
+    size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<::Command> &cmd_buffer);
     std::vector<uint8_t> Serialize();
     void print();
+
+private:
+
+    template <typename T, typename U>
+    T* reinterpret_buffer(U* buffer) {
+        static_assert(std::is_pointer_v<T*>, "T must be a pointer type");
+        return reinterpret_cast<T*>(buffer);
+    }
+
+    void PrintPacket(const Command &cmd);
+
+    size_t num_bytes_;
+    uint16_t calc_crc_;
+    u_int16_t decoder_arg_count_;
+
+    enum PacketDecoderStates {
+        kHeader,
+        kArgs,
+        kFooter
+    };
+
+    PacketDecoderStates decode_state_;
+
+    // FIXME the command buffers should be declared here
+//    std::deque<Command> recv_command_buffer_2;
 
 };
 

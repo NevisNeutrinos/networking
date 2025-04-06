@@ -14,6 +14,63 @@ TCPProtocol::TCPProtocol(const uint16_t cmd, const size_t vec_size) : command_co
     end_code2 = kEndCode2;
 }
 
+void TCPProtocol::PrintPacket(const Command &cmd) {
+    std::cout << "Cmd: " << cmd.command << std::endl;
+    std::cout << "Num Args: " << cmd.arguments.size() << std::endl;
+    std::cout << "Args: ";
+    for (const auto &arg : cmd.arguments) std::cout << arg << " ";
+    std::cout << std::endl;
+}
+
+size_t TCPProtocol::DecodePackets(std::array<uint8_t, 10000> &pbuffer, std::deque<Command> &cmd_buffer) {
+    bool debug = false;
+
+    switch (decode_state_) {
+        case kHeader: {
+            calc_crc_ = CalcCRC(pbuffer.data(), sizeof(Header));
+            auto *header = reinterpret_buffer<Header>(&pbuffer);
+            if (!GoodStartCode(ntohs(header->start_code1), ntohs(header->start_code2))) {
+                std::cerr << "Bad start code!" << std::endl;
+                std::cerr << "Bad Start code! [" << header->start_code1 << "] ["<< header->start_code2 << "]" << std::endl;
+            }
+            decoder_arg_count_ = ntohs(header->arg_count);
+            // std::lock_guard<std::mutex> lock(mutex_);
+            cmd_buffer.emplace_back(ntohs(header->cmd_code), ntohs(header->arg_count));
+            decode_state_ = kArgs;
+            return sizeof(int32_t) * decoder_arg_count_;
+        }
+        case kArgs: {
+            calc_crc_ = CalcCRC(pbuffer.data(), sizeof(int32_t) * decoder_arg_count_, calc_crc_);
+            auto *buf_ptr_32 = reinterpret_buffer<uint32_t>(&pbuffer);
+            // std::lock_guard<std::mutex> lock(mutex_);
+            for (size_t i = 0; i < decoder_arg_count_; i++) {
+                cmd_buffer.back().arguments[i] = ntohl(buf_ptr_32[i]);
+            }
+            decode_state_ = kFooter;
+            return sizeof(Footer);
+        }
+        case kFooter: {
+            auto *footer = reinterpret_buffer<Footer>(&pbuffer);
+            if (ntohs(footer->crc) != calc_crc_) {
+                std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
+            }
+            if(!GoodEndCode(ntohs(footer->end_code1), ntohs(footer->end_code2))) {
+                std::cerr << "Bad end code! [" << footer->end_code1 << "] ["<< footer->end_code2 << "]" << std::endl;
+            }
+            if (debug) PrintPacket(cmd_buffer.back());
+            decode_state_ = kHeader;
+            return 0; // end of packet
+        }
+        default: {
+            // throw std::runtime_error("Invalid state");
+            std::cerr << "Ended up in an invalid state! How???" << std::endl;
+            decode_state_ = kHeader;
+            return 0; // end of packet
+        }
+    } // switch
+    return false;
+}
+
 uint16_t TCPProtocol::CalcCRC(std::vector<uint8_t>& pbuffer, size_t num_bytes, uint16_t crc) {
     for (size_t i = 0; i < num_bytes; i++) {
         crc ^= pbuffer.at(i);

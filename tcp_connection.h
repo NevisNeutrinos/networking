@@ -33,11 +33,15 @@ public:
     }
 
 private:
+
+    TCPProtocol tcp_protocol_;
+
     std::optional<tcp::acceptor> acceptor_;
     std::optional<tcp::socket> accept_socket_;
     tcp::endpoint endpoint_;
     tcp::socket socket_;
-    uint8_t buffer_[1000]{};
+    // uint8_t buffer_[1000]{};
+    std::array<uint8_t, 10000> buffer_{};
     short port_;
     bool client_connected_;
     asio::steady_timer timeout_;
@@ -46,9 +50,14 @@ private:
 
     std::mutex mutex_;
 
+    asio::error_code read_error_;
+    size_t requested_bytes_;
+    size_t received_bytes_;
+    std::chrono::time_point<std::chrono::steady_clock> chrono_read_start_;
+
     void StartClient();
     void StartServer();
-    size_t ReadHandler(size_t read_bytes);
+    void ReadHandler();
     void ReadWriteHandler();
     void ReadData();
     void EchoData();
