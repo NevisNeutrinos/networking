@@ -45,7 +45,7 @@ int main() {
     try {
         asio::io_context io_context;
         std::cout << "Starting server..." << std::endl;
-        TCPConnection server(io_context, "127.0.0.1", 1741, true);
+        TCPConnection server(io_context, "127.0.0.1", 1740, true);
         std::cout << "Starting IO Context..." << std::endl;
 
         std::thread io_thread([&]() { io_context.run(); });

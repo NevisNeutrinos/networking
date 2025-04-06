@@ -4,6 +4,7 @@
 #include <iostream>
 #include <asio.hpp>
 #include <deque>
+#include <chrono>
 #include <optional>
 #include <condition_variable>
 #include "tcp_protocol.h"
@@ -53,7 +54,7 @@ private:
     asio::error_code read_error_;
     size_t requested_bytes_;
     size_t received_bytes_;
-    std::chrono::time_point<std::chrono::steady_clock> chrono_read_start_;
+    std::chrono::high_resolution_clock::time_point chrono_read_start_;
 
     void StartClient();
     void StartServer();

@@ -9,6 +9,8 @@
 #include <cstring>  // memcpy
 #include <iostream>
 #include <vector>
+#include <array>
+#include <deque>
 #include <netinet/in.h>
 
 class Command;
