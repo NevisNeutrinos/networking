@@ -45,9 +45,11 @@ int main() {
     try {
         asio::io_context io_context;
         std::cout << "Starting server..." << std::endl;
-        TCPConnection server(io_context, "127.0.0.1", 1740, true);
+        TCPConnection server(io_context, "127.0.0.1", 12345, true);
         std::cout << "Starting IO Context..." << std::endl;
 
+        // Guard to keep IO contex from completely before we want to quit
+        asio::executor_work_guard<asio::io_context::executor_type> work_guard(io_context.get_executor());
         std::thread io_thread([&]() { io_context.run(); });
 
         while (true) {

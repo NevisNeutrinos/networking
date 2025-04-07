@@ -22,27 +22,26 @@ void TCPProtocol::PrintPacket(const Command &cmd) {
     std::cout << std::endl;
 }
 
-size_t TCPProtocol::DecodePackets(std::array<uint8_t, 10000> &pbuffer, std::deque<Command> &cmd_buffer) {
+size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<Command> &cmd_buffer) {
     bool debug = false;
 
     switch (decode_state_) {
         case kHeader: {
             calc_crc_ = CalcCRC(pbuffer.data(), sizeof(Header));
-            auto *header = reinterpret_buffer<Header>(&pbuffer);
+            const auto *header = reinterpret_buffer<Header>(&pbuffer);
             if (!GoodStartCode(ntohs(header->start_code1), ntohs(header->start_code2))) {
-                std::cerr << "Bad start code!" << std::endl;
                 std::cerr << "Bad Start code! [" << header->start_code1 << "] ["<< header->start_code2 << "]" << std::endl;
             }
             decoder_arg_count_ = ntohs(header->arg_count);
-            // std::lock_guard<std::mutex> lock(mutex_);
-            cmd_buffer.emplace_back(ntohs(header->cmd_code), ntohs(header->arg_count));
+            // Construct a Command packet in the buffer with the command and expected number of args
+            cmd_buffer.emplace_back(ntohs(header->cmd_code), decoder_arg_count_);
             decode_state_ = kArgs;
             return sizeof(int32_t) * decoder_arg_count_;
         }
         case kArgs: {
             calc_crc_ = CalcCRC(pbuffer.data(), sizeof(int32_t) * decoder_arg_count_, calc_crc_);
-            auto *buf_ptr_32 = reinterpret_buffer<uint32_t>(&pbuffer);
-            // std::lock_guard<std::mutex> lock(mutex_);
+            const auto *buf_ptr_32 = reinterpret_buffer<uint32_t>(&pbuffer);
+            // We already have the Command packet with the correct number of args, now just fill it
             for (size_t i = 0; i < decoder_arg_count_; i++) {
                 cmd_buffer.back().arguments[i] = ntohl(buf_ptr_32[i]);
             }
@@ -50,7 +49,7 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, 10000> &pbuffer, std::dequ
             return sizeof(Footer);
         }
         case kFooter: {
-            auto *footer = reinterpret_buffer<Footer>(&pbuffer);
+            const auto *footer = reinterpret_buffer<Footer>(&pbuffer);
             if (ntohs(footer->crc) != calc_crc_) {
                 std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
             }
@@ -62,8 +61,8 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, 10000> &pbuffer, std::dequ
             return 0; // end of packet
         }
         default: {
-            // throw std::runtime_error("Invalid state");
             std::cerr << "Ended up in an invalid state! How???" << std::endl;
+            // Restart the decoder if we end up here
             decode_state_ = kHeader;
             return 0; // end of packet
         }

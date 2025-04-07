@@ -41,8 +41,7 @@ private:
     std::optional<tcp::socket> accept_socket_;
     tcp::endpoint endpoint_;
     tcp::socket socket_;
-    // uint8_t buffer_[1000]{};
-    std::array<uint8_t, 10000> buffer_{};
+    std::array<uint8_t, TCPProtocol::RECVBUFFSIZE> buffer_{};
     short port_;
     bool client_connected_;
     asio::steady_timer timeout_;
@@ -55,29 +54,24 @@ private:
     size_t requested_bytes_;
     size_t received_bytes_;
     std::chrono::high_resolution_clock::time_point chrono_read_start_;
+    asio::steady_timer timer_;
+    bool read_in_progress_ = false;
+    std::atomic_bool packet_read_ = false;
 
     void StartClient();
     void StartServer();
-    void ReadHandler();
-    void ReadWriteHandler();
+    void ReadHandler(const asio::error_code& ec, std::size_t bytes_transferred);
     void ReadData();
     void EchoData();
     void SendData();
     bool DataInSendBuffer();
     bool DataInRecvBuffer();
 
-    enum ReadStates {
-        kHeader,
-        kArgs,
-        kFooter,
-        kEndRecv
-    };
-
-    ReadStates read_state_;
-
     // Creates a blocking wait for commands to
     // become available in the read buffer.
     std::condition_variable cmd_available_;
+
+    asio::io_context& io_context_;
 
 };
 
