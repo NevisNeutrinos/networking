@@ -69,13 +69,21 @@ void TCPConnection::StartServer() {
 }
 
 void TCPConnection::StartClient() {
+
+    client_connected_ = false;
+    if (socket_.is_open()) {
+        socket_.cancel();
+        socket_.close();
+    }
+
     // Set up a timeout (e.g., 3 seconds)
     timeout_.expires_after(std::chrono::seconds(3));
     timeout_.async_wait([this](const asio::error_code& ec) {
         if (!ec) { // Timeout expired
             std::cerr << "Connection timed out.\n";
-            socket_.cancel();  // Force async_connect to fail
-            socket_.close();
+            // Wait for 2s before trying again
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            StartClient();
         }
     });
 
@@ -90,6 +98,8 @@ void TCPConnection::StartClient() {
             client_connected_ = true;
         } else {
             std::cerr << "Connection failed: " << ec.message() << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            StartClient();
         }
     });
 }
@@ -153,11 +163,15 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
         }
     } else if (ec == asio::error::eof) {
         std::cerr << "Connection closed by peer (EOF).\n";
-        // Handle clean closure
+        // If this is a client connection we want to start trying to reconnect after a disconnect
+        if (client_connected_) StartClient();
+        // Handle clean closure // TODO what to do for server
         // close_connection();
     } else {
         std::cerr << "Read Error: " << ec.message() << "\n";
-        // Handle error, maybe close socket
+        // If this is a client connection we want to start trying to reconnect after an error
+        if (client_connected_) StartClient();
+        // Handle error, maybe close socket // TODO what to do for server
         // close_connection();
     }
 }
