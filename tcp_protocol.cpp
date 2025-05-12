@@ -4,7 +4,8 @@
 
 #include "tcp_protocol.h"
 
-TCPProtocol::TCPProtocol(const uint16_t cmd, const size_t vec_size) : command_code(cmd),
+TCPProtocol::TCPProtocol(const uint16_t cmd, const size_t vec_size) : Command(0,0),
+                                                                        command_code(cmd),
                                                                       arg_count(vec_size),
                                                                       arguments(vec_size) {
     start_code1 = kStartCode1;

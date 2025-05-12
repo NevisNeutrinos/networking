@@ -11,14 +11,14 @@
 
 using asio::ip::tcp;
 
-class TCPConnection {
+class TCPConnection : public Command {
 public:
     TCPConnection(asio::io_context& io_context, const std::string& ip_address,
         short port, bool is_server);
     ~TCPConnection();
 
-    std::deque<Command> send_command_buffer_;
-    std::deque<Command> recv_command_buffer_;
+    std::deque<Command> send_command_buffer_{};
+    std::deque<Command> recv_command_buffer_{};
 
     // Interface to send/receive commands and data
     void WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec);

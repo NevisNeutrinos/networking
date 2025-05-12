@@ -13,9 +13,26 @@
 #include <deque>
 #include <netinet/in.h>
 
-class Command;
+// class Command;
+class Command {
+public:
 
-class TCPProtocol {
+    uint16_t command;
+    std::vector<int32_t> arguments;
+
+    Command(const uint16_t cmd, const size_t vec_size) : command(cmd), arguments(vec_size) {}
+
+    void print() {
+        std::cout << "Command:      " << command << " \n";
+        std::cout << "Args: ";
+        for (auto &arg : arguments) {
+            std::cout << " " << arg;
+        }
+        std::cout << std::endl;
+    }
+};
+
+class TCPProtocol : public Command {
 
 public:
 
@@ -99,24 +116,6 @@ private:
     // FIXME the command buffers should be declared here
 //    std::deque<Command> recv_command_buffer_2;
 
-};
-
-class Command {
-public:
-
-    uint16_t command;
-    std::vector<int32_t> arguments;
-
-    Command(const uint16_t cmd, const size_t vec_size) : command(cmd), arguments(vec_size) {}
-
-    void print() {
-        std::cout << "Command:      " << command << " \n";
-        std::cout << "Args: ";
-        for (auto &arg : arguments) {
-            std::cout << " " << arg;
-        }
-        std::cout << std::endl;
-    }
 };
 
 #endif  // TCP_PROTOCOL_H

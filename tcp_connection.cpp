@@ -2,7 +2,8 @@
 
 TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip_address,
     const short port, const bool is_server)
-    : tcp_protocol_(0,0),
+    : Command(0,0),
+      tcp_protocol_(0,0),
       endpoint_(asio::ip::make_address(ip_address), port),
       socket_(io_context),
       port_(port),
@@ -17,6 +18,8 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     // Make sure the decoder is ready for the first packet
     requested_bytes_ = sizeof(TCPProtocol::Header);
     tcp_protocol_.RestartDecoder();
+    send_command_buffer_.clear();
+    recv_command_buffer_.clear();
 
     if (is_server) {
         std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
@@ -230,7 +233,7 @@ void TCPConnection::EchoData() {
 
 void TCPConnection::WriteSendBuffer(const uint16_t cmd, std::vector<int32_t>& vec) {
     Command cmd_packet(cmd, vec.size());
-    cmd_packet.arguments = std::move(vec);
+    if (!vec.empty()) cmd_packet.arguments = std::move(vec);
     WriteSendBuffer(cmd_packet);
 }
 
