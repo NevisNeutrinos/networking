@@ -58,13 +58,13 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, st
             }
             if (debug) PrintPacket(cmd_buffer.back());
             decode_state_ = kHeader;
-            return 0; // end of packet
+            return SIZE_MAX; // end of packet
         }
         default: {
             std::cerr << "Ended up in an invalid state! How???" << std::endl;
             // Restart the decoder if we end up here
             decode_state_ = kHeader;
-            return 0; // end of packet
+            return SIZE_MAX; // end of packet
         }
     } // switch
     return false;

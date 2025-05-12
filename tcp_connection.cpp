@@ -60,6 +60,7 @@ void TCPConnection::StartServer() {
       if (!ec) {
         std::cout << "New client connected!" << std::endl;
           socket_ = std::move(*accept_socket_);
+          tcp_protocol_.RestartDecoder();
           std::thread(&TCPConnection::ReadData, this).detach();
       } else {
           std::cerr << "Client connection failed with error: " << ec.message() << std::endl;
@@ -94,6 +95,7 @@ void TCPConnection::StartClient() {
             std::cout << "Connected to server!" << std::endl;
             // Start a thread for reading and writing, these handle ASIO async operations
             // so they dont use a CPU unless data is being processed
+            tcp_protocol_.RestartDecoder();
             std::thread(&TCPConnection::ReadData, this).detach();
             client_connected_ = true;
         } else {
@@ -139,7 +141,6 @@ void TCPConnection::ReadData() {
 void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_transferred) {
 
     if (!ec) {
-        std::cout << "Read " << bytes_transferred << " bytes successfully.\n";
         // If the requested data was read from the socket we can decode it
         if (bytes_transferred == requested_bytes_) {
             packet_read_ = true;
@@ -149,7 +150,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 std::lock_guard<std::mutex> lock(mutex_);
                 requested_bytes_ = tcp_protocol_.DecodePackets(buffer_, recv_command_buffer_);
             }
-            if (requested_bytes_ == 0) {
+            if (requested_bytes_ == SIZE_MAX) {
                 timer_.cancel();
                 packet_read_ = false;
                 requested_bytes_ = sizeof(TCPProtocol::Header);
