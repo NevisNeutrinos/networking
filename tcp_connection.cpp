@@ -20,7 +20,6 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     tcp_protocol_.RestartDecoder();
     send_command_buffer_.clear();
     recv_command_buffer_.clear();
-
     if (is_server) {
         std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
         std::cout << "PRE Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
@@ -73,11 +72,11 @@ void TCPConnection::StartServer() {
 }
 
 void TCPConnection::StartClient() {
-
+    if (stop_server_.load()) return;
     client_connected_ = false;
     if (socket_.is_open()) {
-        socket_.cancel();
-        socket_.close();
+        // socket_.cancel();
+        // socket_.close();
     }
 
     // Set up a timeout (e.g., 3 seconds)
@@ -111,8 +110,8 @@ void TCPConnection::StartClient() {
 
 void TCPConnection::ReadData() {
     // Set timeout to 5 seconds
+    if (stop_server_.load()) return;
     constexpr auto read_timeout = std::chrono::seconds(5);
-
     asio::async_read( socket_,// Or async_read if you need exactly N bytes
     asio::buffer(buffer_, requested_bytes_), // Read up to buffer size
     std::bind(&TCPConnection::ReadHandler, this, std::placeholders::_1, std::placeholders::_2)
@@ -163,7 +162,12 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
             // 2. Initiate the *next* read operation
             ReadData(); // Loop back to wait for more data
         } else {
-            std::cerr << "Requested " << requested_bytes_ << "B  but received " << bytes_transferred << "B" << std::endl;
+            std::cerr << "Requested " << requested_bytes_ << "B  but received " << bytes_transferred << "B"
+                      << " Starting over" << std::endl;
+            // Remove the last element if there is a half-formed command
+            if (!recv_command_buffer_.empty()) recv_command_buffer_.pop_back();
+            tcp_protocol_.RestartDecoder();
+            ReadData(); // Loop back to wait for more data
         }
     } else if (ec == asio::error::eof) {
         std::cerr << "Connection closed by peer (EOF).\n";

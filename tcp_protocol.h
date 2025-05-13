@@ -84,7 +84,8 @@ public:
     }
 
     // Start decoder waiting for a Header, can be called if packet is lost and we need to restart
-    inline void RestartDecoder() { decode_state_ = kHeader; }
+    void RestartDecoder() { decode_state_ = kHeader; }
+    uint16_t GetDecoderState() const { return static_cast<uint16_t>(decode_state_); }
 
     constexpr static size_t RECVBUFFSIZE = 10000;
     size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<::Command> &cmd_buffer);
