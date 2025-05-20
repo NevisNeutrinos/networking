@@ -7,6 +7,7 @@
 #include <chrono>
 #include <optional>
 #include <condition_variable>
+#include <thread>
 #include "tcp_protocol.h"
 
 using asio::ip::tcp;
@@ -14,11 +15,11 @@ using asio::ip::tcp;
 class TCPConnection : public Command {
 public:
     TCPConnection(asio::io_context& io_context, const std::string& ip_address,
-        short port, bool is_server);
+        uint16_t port, bool is_server, bool use_heartbeat);
     ~TCPConnection();
 
-    std::deque<Command> send_command_buffer_{};
-    std::deque<Command> recv_command_buffer_{};
+    std::deque<Command> send_command_buffer_;
+    std::deque<Command> recv_command_buffer_;
 
     // Interface to send/receive commands and data
     void WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec);
@@ -42,11 +43,14 @@ private:
     tcp::endpoint endpoint_;
     tcp::socket socket_;
     std::array<uint8_t, TCPProtocol::RECVBUFFSIZE> buffer_{};
-    short port_;
+    uint16_t port_;
     bool client_connected_;
     asio::steady_timer timeout_;
+    asio::steady_timer send_timeout_;
     std::atomic_bool stop_cmd_read_;
     std::atomic_bool stop_server_;
+    std::atomic_bool use_heartbeat_;
+    std::thread read_data_thread_;
 
     std::mutex mutex_;
 
@@ -59,6 +63,7 @@ private:
     std::atomic_bool packet_read_ = false;
 
     void StartClient();
+    void ClearSocketBuffer();
     void StartServer();
     void ReadHandler(const asio::error_code& ec, std::size_t bytes_transferred);
     void ReadData();
