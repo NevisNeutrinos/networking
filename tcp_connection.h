@@ -12,7 +12,7 @@
 
 using asio::ip::tcp;
 
-class TCPConnection : public Command {
+class TCPConnection : public std::enable_shared_from_this<TCPConnection>, public Command {
 public:
     TCPConnection(asio::io_context& io_context, const std::string& ip_address,
         uint16_t port, bool is_server, bool use_heartbeat);
@@ -48,11 +48,14 @@ private:
     asio::steady_timer timeout_;
     asio::steady_timer send_timeout_;
     std::atomic_bool stop_cmd_read_;
+    std::atomic_bool stop_cmd_write_;
     std::atomic_bool stop_server_;
     std::atomic_bool use_heartbeat_;
     std::thread read_data_thread_;
+    std::thread write_data_thread_;
 
-    std::mutex mutex_;
+    std::mutex send_mutex_;
+    std::mutex recv_mutex_;
 
     asio::error_code read_error_;
     size_t requested_bytes_;
@@ -75,6 +78,7 @@ private:
     // Creates a blocking wait for commands to
     // become available in the read buffer.
     std::condition_variable cmd_available_;
+    std::condition_variable send_cmd_available_;
 
     asio::io_context& io_context_;
 
