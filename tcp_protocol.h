@@ -71,6 +71,9 @@ public:
         uint16_t end_code2;
     };
 
+    // Heart beat command
+    static constexpr uint16_t kHeartBeat = 0xFFFF;
+
     static uint16_t CalcCRC(std::vector<uint8_t> &pbuffer, size_t num_bytes, uint16_t crc = 0);
     static uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc = 0);
 

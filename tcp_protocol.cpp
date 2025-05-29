@@ -31,7 +31,7 @@ void TCPProtocol::PrintPacket(const Command &cmd) {
 
 size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<Command> &cmd_buffer) {
     bool debug = false;
-
+    std::cout << "State: " << decode_state_ << std::endl;
     switch (decode_state_) {
         case kHeader: {
             calc_crc_ = CalcCRC(pbuffer.data(), sizeof(Header));
@@ -42,6 +42,9 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, st
             decoder_arg_count_ = ntohs(header->arg_count);
             // Construct a Command packet in the buffer with the command and expected number of args
             cmd_buffer.emplace_back(ntohs(header->cmd_code), decoder_arg_count_);
+            std::cout << "Recv Cmd: " << ntohs(header->cmd_code) << std::endl;
+            std::cout << "StartCode: " << ntohs(header->start_code1) << " / " << ntohs(header->start_code2) << std::endl;
+            std::cout << "Arg Count: " << decoder_arg_count_ << std::endl;
             decode_state_ = kArgs;
             return sizeof(int32_t) * decoder_arg_count_;
         }
@@ -65,6 +68,8 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, st
             }
             if (debug) PrintPacket(cmd_buffer.back());
             decode_state_ = kHeader;
+            std::cout << "CRC: " << ntohs(footer->crc) << std::endl;
+            std::cout << "EndCode: " << ntohs(footer->end_code1) << " / " << ntohs(footer->end_code2) << std::endl;
             return SIZE_MAX; // end of packet
         }
         default: {
