@@ -45,20 +45,22 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
 
 TCPConnection::~TCPConnection() {
     // Stop the server from accepting new connections
+    send_cmd_available_.notify_one();
     stop_server_.store(true);
     stop_cmd_write_.store(true);
-    send_cmd_available_.notify_one();
 
-    std::cout << "Clearing TCP buffers and closing connections ..." << std::endl;
-    send_command_buffer_.clear();
-    recv_command_buffer_.clear();
-    if (read_data_thread_.joinable()) read_data_thread_.join();
     if (write_data_thread_.joinable()) write_data_thread_.join();
     if (socket_.is_open()) {
         socket_.cancel(); // cancel all pending async operations
         socket_.close();
         std::cout << "Closed TCP socket" << std::endl;
     }
+
+    std::cout << "Clearing TCP buffers and closing connections ..." << std::endl;
+    send_command_buffer_.clear();
+    recv_command_buffer_.clear();
+    if (read_data_thread_.joinable()) read_data_thread_.join();
+
     std::cout << "Destructed TCP connection" << std::endl;
 }
 
@@ -87,9 +89,12 @@ void TCPConnection::StartClient() {
 
     if (socket_.is_open()) {
         std::cout << "Empty and Cancel socket operations" << std::endl;
+        std::unique_lock<std::mutex> slock(sock_mutex_);
         ClearSocketBuffer();
         socket_.cancel();
         socket_.close();
+        slock.unlock();
+        std::cout << "Socket cancelled and closed" << std::endl;
     }
     if (read_data_thread_.joinable()) {
         std::cout << "Joining read thread before restarting" << std::endl;
@@ -108,20 +113,20 @@ void TCPConnection::StartClient() {
     requested_bytes_ = sizeof(TCPProtocol::Header);
 
     // Set up a timeout (e.g., 3 seconds)
-    // timeout_.expires_after(std::chrono::seconds(3));
-    // timeout_.async_wait([this](const asio::error_code& ec) {
-    //     if (!ec) { // Timeout expired
-    //         std::cerr << "Connection timed out. [" << port_ << "]" << std::endl;
-    //         // Wait for 2s before trying again
-    //         std::this_thread::sleep_for(std::chrono::seconds(2));
-    //         StartClient();
-    //     }
-    // });
-    std::cout << "Async_connet" << std::endl;
+    timeout_.expires_after(std::chrono::seconds(3));
+    timeout_.async_wait([this](const asio::error_code& ec) {
+        if (!ec) { // Timeout expired
+            std::cerr << "Connection timed out. [" << port_ << "]" << std::endl;
+            // Wait for 2s before trying again
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            StartClient();
+        }
+    });
+    std::cout << "--> Async_connect" << std::endl;
     // Receive command socket
     socket_.async_connect(endpoint_, [this](const asio::error_code& ec) {
         if (!ec) {
-            // timeout_.cancel();
+            timeout_.cancel();
             std::cout << "Receive socket connected to server! [" << port_ << "]" << std::endl;
             // Start a thread for reading and writing, these handle ASIO async operations
             // so they don't use a CPU unless data is being processed
@@ -140,12 +145,14 @@ void TCPConnection::StartClient() {
 
 void TCPConnection::ClearSocketBuffer() {
     asio::error_code ignored_ec;
+    std::unique_lock<std::mutex> slock(sock_mutex_);
     const size_t bytes_available = socket_.available(ignored_ec);
     if (bytes_available > 0) {
         std::vector<uint8_t> temp_buffer(bytes_available);
         socket_.read_some(asio::buffer(temp_buffer), ignored_ec);
         temp_buffer.clear();
     }
+    slock.unlock();
     std::cerr << "Emptied buffer of " << bytes_available << "B" << std::endl;
 }
 
@@ -154,34 +161,51 @@ void TCPConnection::ReadData() {
     if (stop_server_.load()) return;
     constexpr auto read_timeout = std::chrono::seconds(5);
 
-    asio::async_read( socket_,// Or async_read if you need exactly N bytes
-                      asio::buffer(buffer_, requested_bytes_), // Read up to buffer size
-                std::bind(&TCPConnection::ReadHandler, this, std::placeholders::_1, std::placeholders::_2)
-    );
+    std::cout << "Setting read to " << requested_bytes_ << "B " << std::endl;
+    std::cout << "io_context_.stopped(): " << io_context_.stopped() << std::endl;
+    std::unique_lock<std::mutex> slock(sock_mutex_);
+    asio::error_code error;
+    size_t bytes_transferred = asio::read( socket_,// Or async_read if you need exactly N bytes
+                  asio::buffer(buffer_, requested_bytes_), // Read up to buffer size
+                  error);
+
+    if (!error) {
+        std::cout << "Received: " << bytes_transferred << "B" << std::endl;
+    } else {
+        std::cerr << "Received error: " << error.message() << "\n";
+    }
+    slock.unlock();
+    ReadHandler(error, bytes_transferred);
+
+    // asio::async_read( socket_,// Or async_read if you need exactly N bytes
+    //                   asio::buffer(buffer_, requested_bytes_), // Read up to buffer size
+    //             std::bind(&TCPConnection::ReadHandler, this, std::placeholders::_1, std::placeholders::_2)
+    // );
 
     // Timeout in case something happens in the middle of the packet send
-    if (client_connected_ && (packet_read_ || use_heartbeat_)) {
-        timer_.expires_after(read_timeout);
-        timer_.async_wait([this](const asio::error_code& ec) {
-            // operation_aborted is the timer cancel
-            if (ec == asio::error::operation_aborted) {
-                return; // Timer cancelled, read completed
-            }
-            packet_read_ = false;
-            std::cerr << "Read timeout or no heartbeat received. Emptying buffer..  EC=" << ec.message() << std::endl;
-            // Empty the socket buffer if there's any data in it
-            ClearSocketBuffer();
-            client_connected_ = false;
-            // tcp_protocol_.RestartDecoder();
-            // timer_.cancel();
-            std::cout << "Reconnecting...  [" << port_ << "]" << std::endl;
-            StartClient();
-        });
-    }
+    // if (client_connected_ && (packet_read_ || use_heartbeat_)) {
+    //     // timer_.expires_after(read_timeout);
+    //     timer_.async_wait([this](const asio::error_code& ec) {
+    //         // operation_aborted is the timer cancel. If success that means the timer completed
+    //         if (ec == asio::error::operation_aborted) {
+    //             return; // Timer cancelled, read completed
+    //         }
+    //         packet_read_ = false;
+    //         std::cerr << "Read timeout or no heartbeat received. Emptying buffer..  EC=" << ec.message() << std::endl;
+    //         // Empty the socket buffer if there's any data in it
+    //         ClearSocketBuffer();
+    //         client_connected_ = false;
+    //         // tcp_protocol_.RestartDecoder();
+    //         // timer_.cancel();
+    //         std::cout << "Reconnecting...  [" << port_ << "]" << std::endl;
+    //         StartClient();
+    //     });
+    // }
 }
 
 void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_transferred) {
-
+    std::cout << "[" << port_ << "] RecvB: " << requested_bytes_ << "/" << bytes_transferred << std::endl;
+    for (size_t i = 0; i < bytes_transferred; i++) std::cout << std::hex << static_cast<int>(buffer_[i]) << std::dec << std::endl;
     if (!ec) {
         // If the requested data was read from the socket we can decode it
         if (bytes_transferred == requested_bytes_) {
@@ -193,11 +217,16 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 requested_bytes_ = tcp_protocol_.DecodePackets(buffer_, recv_command_buffer_);
             }
             if (requested_bytes_ == SIZE_MAX) {
-                timer_.cancel();
+                std::cout << "Cancelling timer, expiry: " << std::endl;
+                // timer_.cancel();
+                timer_.expires_after(std::chrono::seconds(5));
                 packet_read_ = false;
                 requested_bytes_ = sizeof(TCPProtocol::Header);
                 chrono_read_start_= std::chrono::high_resolution_clock::now();
+                // if (use_heartbeat_ && recv_command_buffer_.back().command == TCPProtocol::kHeartBeat) {}
                 cmd_available_.notify_all();
+                // Send an ack back after receiving a message
+                if (!recv_command_buffer_.empty()) WriteSendBuffer(recv_command_buffer_.back());
             }
             // 2. Initiate the *next* read operation
             ReadData(); // Loop back to wait for more data
@@ -290,7 +319,7 @@ void TCPConnection::WriteSendBuffer(const Command& cmd_struct) {
     std::unique_lock<std::mutex> lock(send_mutex_);
     send_command_buffer_.emplace_back(cmd_struct);
     lock.unlock();
-    std::cout << "Send cmd: " << cmd_struct.command << std::endl;
+    std::cout << "Send cmd: " << cmd_struct.command << "/" << cmd_struct.arguments.size() << std::endl;
     send_cmd_available_.notify_one();
     // This will call the io_context to execute the sending
     // auto self(shared_from_this());
@@ -302,7 +331,8 @@ void TCPConnection::SendData() {
     std::cout << stop_cmd_write_.load() << "/" << stop_server_.load()  << std::endl;
     while (!stop_server_.load() && !stop_cmd_write_.load()) {
         std::unique_lock<std::mutex> lock(send_mutex_);
-        send_cmd_available_.wait(lock, [this] { //FIXME add self
+
+        send_cmd_available_.wait(lock, [this] { // FIXME add self
         return !send_command_buffer_.empty() || stop_cmd_write_.load() || stop_server_.load();
         });
         if (stop_cmd_write_.load() || stop_server_.load()) break; // just an extra catch
@@ -313,7 +343,19 @@ void TCPConnection::SendData() {
         packet.arguments = std::move(send_command_buffer_.front().arguments);
         std::vector<uint8_t> buffer = packet.Serialize();
         send_command_buffer_.pop_front();
+        lock.unlock();
         std::cout << "Sending Bytes: " << buffer.size() << " port=" << port_ << std::endl;
+        std::cout << "[" << port_ << "] Sending bytes: " <<  std::endl;
+        for (auto byte : buffer) std::cout << std::hex << static_cast<int>(byte) << std::dec << std::endl;
+
+        // std::unique_lock<std::mutex> slock(sock_mutex_);
+        // asio::error_code ec;
+        // size_t bytes_sent = asio::write(socket_, asio::buffer(buffer), ec);
+        // if (!ec) {
+        //     std::cout << "Sent: " << bytes_sent << "B" << std::endl;
+        // } else {
+        //     std::cerr << "Send error: " << ec.message() << "\n";
+        // }
 
         async_write(socket_, asio::buffer(buffer), [this](const asio::error_code &ec,
                                                                             const std::size_t &bytes_sent) {
@@ -323,7 +365,7 @@ void TCPConnection::SendData() {
                 std::cerr << "Send error: " << ec.message() << "\n";
             }
         });
-        lock.unlock();
+        // slock.unlock();
     }
     std::cout << "Exit SendData" << std::endl;
 }

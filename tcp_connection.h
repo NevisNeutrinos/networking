@@ -56,6 +56,7 @@ private:
 
     std::mutex send_mutex_;
     std::mutex recv_mutex_;
+    std::mutex sock_mutex_;
 
     asio::error_code read_error_;
     size_t requested_bytes_;
