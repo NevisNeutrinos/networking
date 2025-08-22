@@ -41,11 +41,21 @@ std::vector<int32_t> GetUserInputList() {
     return numbers;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+
+    if (argc < 3) {
+        std::cerr << "Please include IP address and port!" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <IP address> <port>\n";
+        return 1;
+    }
+
+    std::string ip_address = argv[1];
+    uint16_t port = std::stoi(argv[2]);
+
     try {
         asio::io_context io_context;
         std::cout << "Starting server..." << std::endl;
-        TCPConnection server(io_context, "127.0.0.1", 12345, true);
+        TCPConnection server(io_context, ip_address, port, true, false);
         std::cout << "Starting IO Context..." << std::endl;
 
         // Guard to keep IO contex from completely before we want to quit
