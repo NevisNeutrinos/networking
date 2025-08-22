@@ -50,7 +50,21 @@ public:
     static constexpr size_t footer_size_ = 6;
 
     // Constructor
-    TCPProtocol(uint16_t cmd, size_t vec_size);// : Command(cmd, vec_size) {};
+    // TCPProtocol(uint16_t cmd, size_t vec_size);
+    TCPProtocol(const uint16_t cmd, const size_t vec_size) :
+    Command(cmd, vec_size),
+    arg_count(vec_size),
+    num_bytes_(0),
+    calc_crc_(0),
+    decoder_arg_count_(0),
+    decode_state_(kHeader) {
+
+        start_code1 = kStartCode1;
+        start_code2 = kStartCode2;
+        crc = 1;
+        end_code1 = kEndCode1;
+        end_code2 = kEndCode2;
+    }
 
     // Structure for a packet
     uint16_t start_code1 = kEndCode1;
@@ -161,16 +175,26 @@ public:
     }
 
     TCPProtocol Deserialize(std::vector<uint8_t> &data) {
-        // The minimum data size is 16b so we are safe to cast from 8b to 16b
-        // without worrying about bit alignment.
-        std::vector<uint16_t> pbuffer;
-        std::memcpy(pbuffer.data(), data.data(), data.size());
 
+        if (data.size() % 2 != 0) {
+            throw std::runtime_error("Invalid data size for deserialization.");
+        }
+
+        // The minimum data size is 16b so we are safe to cast from 8b to 16b
+        // without worrying about bit alignment. Preallocate the memory with reserve()
+        // Get a pointer to the start of the byte data, cast to the new pointer type
+        uint16_t* p_start16 = reinterpret_cast<uint16_t*>(data.data());
+        size_t num_uint16s = data.size() / 2;
+
+        // Construct the new vector by copying from the reinterpreted memory range
+        std::vector<uint16_t> pbuffer(p_start16, p_start16 + num_uint16s);
+        for (auto &word : pbuffer) { word = ntohs(word); }
 
         size_t word_count = 0;
-        if ( !GoodStartCode(pbuffer.at(word_count++), pbuffer.at(word_count++)) ) {
+        if ( !GoodStartCode(pbuffer.at(word_count), pbuffer.at(word_count+1)) ) {
             std::cerr << "Bad start code!" << std::endl;
         }
+        word_count += 2;
 
         uint16_t cmd_code = pbuffer.at(word_count++);
         uint16_t arg_count = pbuffer.at(word_count++);
@@ -179,8 +203,11 @@ public:
         TCPProtocol packet(cmd_code, arg_count);
 
         // The args are 32b so cast 16b vector to 32b
-        std::vector<int32_t> arg_buffer;
-        std::memcpy(arg_buffer.data(), pbuffer.data() + word_count, arg_count);
+        int32_t* p_start32 = reinterpret_cast<int32_t*>(data.data());
+        p_start32 += word_count / 2;
+        std::vector<int32_t> arg_buffer(p_start32, p_start32 + arg_count);
+        for (auto &word : arg_buffer) { word = ntohl(word); }
+
         packet.SetArguments(arg_buffer);
         word_count += sizeof(uint16_t) * arg_count; // keep track of how many 16b words
 
@@ -191,7 +218,7 @@ public:
             std::cerr << "Bad CRC! Calc/Decoded=" << calc_crc << "/" << decoded_crc << std::endl;
         }
 
-        if ( !GoodEndCode(pbuffer.at(word_count++), pbuffer.at(word_count++)) ) {
+        if ( !GoodEndCode(pbuffer.at(word_count), pbuffer.at(word_count+1)) ) {
             std::cerr << "Bad end code!" << std::endl;
         }
 
@@ -202,7 +229,7 @@ private:
 
     template <typename T, typename U>
     T* reinterpret_buffer(U* buffer) {
-        static_assert(std::is_pointer_v<T*>, "T must be a pointer type");
+        // static_assert(std::is_pointer_v<T*>, "T must be a pointer type");
         return reinterpret_cast<T*>(buffer);
     }
 
