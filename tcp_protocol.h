@@ -23,6 +23,9 @@ public:
 
     Command(const uint16_t cmd, const size_t vec_size) : command(cmd), arguments(vec_size) {}
 
+    // Public setter for the arguemnts of the packet
+    void SetArguments(const std::vector<int32_t> &args) { arguments = std::move(args); };
+
     void print() {
         std::cout << "Command:      " << command << " \n";
         std::cout << "Args: ";
@@ -47,14 +50,14 @@ public:
     static constexpr size_t footer_size_ = 6;
 
     // Constructor
-    TCPProtocol(uint16_t cmd, size_t vec_size);
+    TCPProtocol(uint16_t cmd, size_t vec_size);// : Command(cmd, vec_size) {};
 
     // Structure for a packet
     uint16_t start_code1 = kEndCode1;
     uint16_t start_code2;
-    uint16_t command_code;
+    // command, from Command class
     uint16_t arg_count;
-    std::vector<int32_t> arguments;
+    // std::vector<int32_t> arguments, from Command class
     uint16_t crc;
     uint16_t end_code1;
     uint16_t end_code2;
@@ -75,11 +78,8 @@ public:
     // Heart beat command
     static constexpr uint16_t kHeartBeat = 0xFFFF;
 
-    // Public setter for the arguemnts of the packet
-    void SetArguments(const std::vector<int32_t> &args) { arguments = std::move(args); };
-
-    static uint16_t CalcCRC(std::vector<uint8_t> &pbuffer, size_t num_bytes, uint16_t crc = 0);
-    static uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc = 0);
+    // static uint16_t CalcCRC(std::vector<uint8_t> &pbuffer, size_t num_bytes, uint16_t crc = 0);
+    // static uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc = 0);
 
     static uint16_t getHeaderSize() { return header_size_; }
     static uint16_t getFooterSize() { return footer_size_; }
@@ -96,9 +96,107 @@ public:
 
     constexpr static size_t RECVBUFFSIZE = 10000;
     size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<::Command> &cmd_buffer);
-    std::vector<uint8_t> Serialize();
-    TCPProtocol Deserialize(std::vector<uint8_t> &data);
+    // std::vector<uint8_t> Serialize();
+    // TCPProtocol Deserialize(std::vector<uint8_t> &data);
     void print();
+
+    uint16_t CalcCRC(std::vector<uint8_t>& pbuffer, size_t num_bytes, uint16_t crc=0) {
+        for (size_t i = 0; i < num_bytes; i++) {
+            crc ^= pbuffer.at(i);
+            for (int j = 0; j < 8; j++) {
+                if (crc & 1) { crc = (crc >> 1) ^ 0x8408; }
+                else { crc >>= 1; }
+            }
+        }
+        return crc;
+    }
+
+    uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc=0) {
+        for (size_t i = 0; i < num_bytes; i++) {
+            crc ^= pbuffer[i];
+            for (int j = 0; j < 8; j++) {
+                if (crc & 1) { crc = (crc >> 1) ^ 0x8408; }
+                else { crc >>= 1; }
+            }
+        }
+        return crc;
+    }
+
+    std::vector<uint8_t> Serialize() {
+        std::vector<uint8_t> buffer;
+        std::cout << "Serialize nArgs: " << arguments.size() << std::endl;
+        // Header + arguments + footer
+        size_t header_content_bytes = header_size_ + arguments.size() * sizeof(int32_t);
+        buffer.resize(header_content_bytes + footer_size_);
+
+        size_t offset = 0;
+        auto Append = [&](const void* data, size_t size) {
+            std::memcpy(buffer.data() + offset, data, size);
+            offset += size;
+        };
+        uint16_t tmp16 = htons(start_code1);
+        Append(&tmp16, sizeof(start_code1));
+        tmp16 = htons(start_code2);
+        Append(&tmp16, sizeof(start_code2));
+        tmp16 = htons(command);
+        Append(&tmp16, sizeof(command));
+        tmp16 = htons(arg_count);
+        Append(&tmp16, sizeof(arg_count));
+        uint32_t tmp32;
+        for (int32_t arg : arguments) {
+            tmp32 = htonl(arg);
+            Append(&tmp32, sizeof(arg));
+        }
+        crc = CalcCRC(buffer, header_content_bytes);
+        tmp16 = htons(crc);
+        Append(&tmp16, sizeof(crc));
+        tmp16 = htons(end_code1);
+        Append(&tmp16, sizeof(end_code1));
+        tmp16 = htons(end_code2);
+        Append(&tmp16, sizeof(end_code2));
+
+        std::cout << "buffer.size() " << buffer.size() << std::endl;
+
+        return buffer;
+    }
+
+    TCPProtocol Deserialize(std::vector<uint8_t> &data) {
+        // The minimum data size is 16b so we are safe to cast from 8b to 16b
+        // without worrying about bit alignment.
+        std::vector<uint16_t> pbuffer;
+        std::memcpy(pbuffer.data(), data.data(), data.size());
+
+
+        size_t word_count = 0;
+        if ( !GoodStartCode(pbuffer.at(word_count++), pbuffer.at(word_count++)) ) {
+            std::cerr << "Bad start code!" << std::endl;
+        }
+
+        uint16_t cmd_code = pbuffer.at(word_count++);
+        uint16_t arg_count = pbuffer.at(word_count++);
+
+        // We need to know how many args to initialize the packet
+        TCPProtocol packet(cmd_code, arg_count);
+
+        // The args are 32b so cast 16b vector to 32b
+        std::vector<int32_t> arg_buffer;
+        std::memcpy(arg_buffer.data(), pbuffer.data() + word_count, arg_count);
+        packet.SetArguments(arg_buffer);
+        word_count += sizeof(uint16_t) * arg_count; // keep track of how many 16b words
+
+        // Check the CRC, it includes everything except the footer
+        uint16_t decoded_crc = pbuffer.at(word_count++);
+        uint16_t calc_crc = CalcCRC(data, data.size() - sizeof(Footer));
+        if (calc_crc != decoded_crc) {
+            std::cerr << "Bad CRC! Calc/Decoded=" << calc_crc << "/" << decoded_crc << std::endl;
+        }
+
+        if ( !GoodEndCode(pbuffer.at(word_count++), pbuffer.at(word_count++)) ) {
+            std::cerr << "Bad end code!" << std::endl;
+        }
+
+        return packet;
+    }
 
 private:
 
