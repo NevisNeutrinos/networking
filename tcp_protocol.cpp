@@ -104,6 +104,45 @@ uint16_t TCPProtocol::CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t
     return crc;
 }
 
+TCPProtocol TCPProtocol::Deserialize(std::vector<uint8_t> &data) {
+    // The minimum data size is 16b so we are safe to cast from 8b to 16b
+    // without worrying about bit alignment.
+    std::vector<uint16_t> pbuffer;
+    std::memcpy(pbuffer.data(), data.data(), data.size());
+
+
+    size_t word_count = 0;
+    if ( !GoodStartCode(pbuffer.at(word_count++), pbuffer.at(word_count++)) ) {
+        std::cerr << "Bad start code!" << std::endl;
+    }
+
+    uint16_t cmd_code = pbuffer.at(word_count++);
+    uint16_t arg_count = pbuffer.at(word_count++);
+
+    // We need to know how many args to initialize the packet
+    TCPProtocol packet(cmd_code, arg_count);
+
+    // The args are 32b so cast 16b vector to 32b
+    std::vector<int32_t> arg_buffer;
+    std::memcpy(arg_buffer.data(), pbuffer.data() + word_count, arg_count);
+    packet.SetArguments(arg_buffer);
+    word_count += sizeof(uint16_t) * arg_count; // keep track of how many 16b words
+
+    // Check the CRC, it includes everything except the footer
+    uint16_t decoded_crc = pbuffer.at(word_count++);
+    uint16_t calc_crc = CalcCRC(data, data.size() - sizeof(Footer));
+    if (calc_crc != decoded_crc) {
+        std::cerr << "Bad CRC! Calc/Decoded=" << calc_crc << "/" << decoded_crc << std::endl;
+    }
+
+    if ( !GoodEndCode(pbuffer.at(word_count++), pbuffer.at(word_count++)) ) {
+        std::cerr << "Bad end code!" << std::endl;
+    }
+
+    return packet;
+}
+
+
 std::vector<uint8_t> TCPProtocol::Serialize() {
     std::vector<uint8_t> buffer;
     std::cout << "Serialize nArgs: " << arguments.size() << std::endl;

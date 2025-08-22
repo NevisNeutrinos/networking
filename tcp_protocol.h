@@ -11,6 +11,7 @@
 #include <vector>
 #include <array>
 #include <deque>
+#include <utility>
 #include <netinet/in.h>
 
 // class Command;
@@ -74,6 +75,9 @@ public:
     // Heart beat command
     static constexpr uint16_t kHeartBeat = 0xFFFF;
 
+    // Public setter for the arguemnts of the packet
+    void SetArguments(const std::vector<int32_t> &args) { arguments = std::move(args); };
+
     static uint16_t CalcCRC(std::vector<uint8_t> &pbuffer, size_t num_bytes, uint16_t crc = 0);
     static uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc = 0);
 
@@ -93,6 +97,7 @@ public:
     constexpr static size_t RECVBUFFSIZE = 10000;
     size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<::Command> &cmd_buffer);
     std::vector<uint8_t> Serialize();
+    TCPProtocol Deserialize(std::vector<uint8_t> &data);
     void print();
 
 private:
