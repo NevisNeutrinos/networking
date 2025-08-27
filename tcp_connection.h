@@ -51,6 +51,7 @@ private:
     std::atomic_bool stop_cmd_write_;
     std::atomic_bool stop_server_;
     std::atomic_bool use_heartbeat_;
+    std::atomic_bool is_server_;
     std::thread read_data_thread_;
     std::thread write_data_thread_;
 

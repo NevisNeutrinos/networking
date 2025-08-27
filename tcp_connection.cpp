@@ -14,6 +14,7 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       stop_cmd_write_(false),
       stop_server_(false),
       use_heartbeat_(use_heartbeat),
+      is_server_(is_server),
       received_bytes_(0),
       timer_(io_context),
       io_context_(io_context) {
@@ -23,7 +24,7 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     tcp_protocol_.RestartDecoder();
     send_command_buffer_.clear();
     recv_command_buffer_.clear();
-    if (is_server) {
+    if (is_server_) {
         std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
         std::cout << "PRE Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
         acceptor_.emplace(tcp::acceptor(io_context, endpoint_));
@@ -225,8 +226,9 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 chrono_read_start_= std::chrono::high_resolution_clock::now();
                 // if (use_heartbeat_ && recv_command_buffer_.back().command == TCPProtocol::kHeartBeat) {}
                 cmd_available_.notify_all();
-                // Send an ack back after receiving a message
-                if (!recv_command_buffer_.empty()) WriteSendBuffer(recv_command_buffer_.back());
+                // Send an ack back after receiving a message, for client only
+                if (!is_server_ && !recv_command_buffer_.empty()) WriteSendBuffer(recv_command_buffer_.back());
+                // if (!recv_command_buffer_.empty()) WriteSendBuffer(recv_command_buffer_.back());  //-- commented out JLS
             }
             // 2. Initiate the *next* read operation
             ReadData(); // Loop back to wait for more data
@@ -344,8 +346,8 @@ void TCPConnection::SendData() {
         std::vector<uint8_t> buffer = packet.Serialize();
         send_command_buffer_.pop_front();
         lock.unlock();
-        std::cout << "Sending Bytes: " << buffer.size() << " port=" << port_ << std::endl;
-        std::cout << "[" << port_ << "] Sending bytes: " <<  std::endl;
+        // std::cout << "Sending Bytes: " << buffer.size() << " port=" << port_ << std::endl;
+        // std::cout << "[" << port_ << "] Sending bytes: " <<  std::endl;
         for (auto byte : buffer) std::cout << std::hex << static_cast<int>(byte) << std::dec << std::endl;
 
         // std::unique_lock<std::mutex> slock(sock_mutex_);
