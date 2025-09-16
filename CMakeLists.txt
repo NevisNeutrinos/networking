@@ -45,6 +45,33 @@ target_compile_definitions(GramsReadoutConnect PRIVATE ASIO_STANDALONE)
 target_include_directories(GramsReadoutConnect PRIVATE ${ASIO_INCLUDE_DIR})
 target_link_libraries(GramsReadoutConnect PRIVATE pthread)
 
+########################################
+# pGRAMS Connection Configuration
+# Client
+message(STATUS "Compiling pGRAMS Client")
+add_executable(pgrams_client unit_test/client_grams_setup.cpp
+        tcp_connection.cpp
+        tcp_connection.h
+        tcp_protocol.h
+        tcp_protocol.cpp)
+target_compile_definitions(pgrams_client PRIVATE ASIO_STANDALONE)
+target_include_directories(pgrams_client PRIVATE ${ASIO_INCLUDE_DIR})
+target_link_libraries(pgrams_client PRIVATE pthread)
+
+
+## Server
+message(STATUS "Compiling pGRAMS Server")
+add_executable(pgrams_server unit_test/server_grams_setup.cpp
+        tcp_connection.cpp
+        tcp_connection.h
+        tcp_protocol.h
+        tcp_protocol.cpp)
+
+target_compile_definitions(pgrams_server PRIVATE ASIO_STANDALONE)
+target_include_directories(pgrams_server PRIVATE ${ASIO_INCLUDE_DIR})
+target_link_libraries(pgrams_server PRIVATE pthread)
+
+
 set(COMPILE_UNIT_TESTS FALSE)
 if(COMPILE_UNIT_TESTS)
     add_subdirectory(unit_test)

@@ -15,7 +15,7 @@ using asio::ip::tcp;
 class TCPConnection : public std::enable_shared_from_this<TCPConnection>, public Command {
 public:
     TCPConnection(asio::io_context& io_context, const std::string& ip_address,
-        uint16_t port, bool is_server, bool use_heartbeat);
+        uint16_t port, bool is_server, bool use_heartbeat, bool monitor_link);
     ~TCPConnection();
 
     std::deque<Command> send_command_buffer_;
@@ -52,9 +52,12 @@ private:
     std::atomic_bool stop_server_;
     std::atomic_bool use_heartbeat_;
     std::atomic_bool is_server_;
+    bool monitor_link_;  // set true if a monitor link, else assumed to be command link
     std::thread read_data_thread_;
     std::thread write_data_thread_;
 
+    bool debug_flag_;
+    std::atomic_bool restart_client_;
     std::mutex send_mutex_;
     std::mutex recv_mutex_;
     std::mutex sock_mutex_;
@@ -71,6 +74,7 @@ private:
     void ClearSocketBuffer();
     void StartServer();
     void ReadHandler(const asio::error_code& ec, std::size_t bytes_transferred);
+    void SendHandler(const asio::error_code& ec, const std::size_t &bytes_sent);
     void ReadData();
     void EchoData();
     void SendData();
@@ -81,6 +85,7 @@ private:
     // become available in the read buffer.
     std::condition_variable cmd_available_;
     std::condition_variable send_cmd_available_;
+    Command recv_command_;
 
     asio::io_context& io_context_;
 

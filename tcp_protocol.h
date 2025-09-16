@@ -109,7 +109,7 @@ public:
     uint16_t GetDecoderState() const { return static_cast<uint16_t>(decode_state_); }
 
     constexpr static size_t RECVBUFFSIZE = 10000;
-    size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, std::deque<::Command> &cmd_buffer);
+    size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Command &recv_cmd);
     // std::vector<uint8_t> Serialize();
     // TCPProtocol Deserialize(std::vector<uint8_t> &data);
     void print();
@@ -138,7 +138,7 @@ public:
 
     std::vector<uint8_t> Serialize() {
         std::vector<uint8_t> buffer;
-        std::cout << "Serialize nArgs: " << arguments.size() << std::endl;
+        //std::cout << "Serialize nArgs: " << arguments.size() << std::endl;
         // Header + arguments + footer
         size_t header_content_bytes = header_size_ + arguments.size() * sizeof(int32_t);
         buffer.resize(header_content_bytes + footer_size_);
@@ -169,7 +169,7 @@ public:
         tmp16 = htons(end_code2);
         Append(&tmp16, sizeof(end_code2));
 
-        std::cout << "buffer.size() " << buffer.size() << std::endl;
+        //std::cout << "buffer.size() " << buffer.size() << std::endl;
 
         return buffer;
     }

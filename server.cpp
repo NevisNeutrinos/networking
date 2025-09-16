@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
     try {
         asio::io_context io_context;
         std::cout << "Starting server..." << std::endl;
-        TCPConnection server(io_context, ip_address, port, true, false);
+        TCPConnection server(io_context, ip_address, port, true, false, false);
         std::cout << "Starting IO Context..." << std::endl;
 
         // Guard to keep IO contex from completely before we want to quit
