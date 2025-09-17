@@ -170,7 +170,7 @@ void TCPConnection::ClearSocketBuffer() {
 void TCPConnection::ReadData() {
     // Set timeout to 1 seconds, the heartbeat
     if (stop_server_.load()) return;
-    if (restart_client_.load()) StartClient();
+    if (!is_server_ && restart_client_.load()) StartClient();
     constexpr auto read_timeout = std::chrono::milliseconds(1500); // give 0.5s grace period
 
     if (debug_flag_) std::cout << "Setting read to " << requested_bytes_ << "B " << std::endl;
@@ -181,8 +181,8 @@ void TCPConnection::ReadData() {
                 std::bind(&TCPConnection::ReadHandler, this, std::placeholders::_1, std::placeholders::_2)
     );
 
-    // Timeout in case something happens in the middle of the packet send
-    if (client_connected_ && (packet_read_ || use_heartbeat_) && !monitor_link_) {
+    // Timeout in case something happens in the middle of the packet read
+    if (!is_server_ && client_connected_ && (packet_read_ || use_heartbeat_) && !monitor_link_) {
         timer_.expires_after(read_timeout);
         timer_.async_wait([this](const asio::error_code& ec) {
             // operation_aborted is the timer cancel. If success that means the timer completed
@@ -252,14 +252,18 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
         }
     } else if (ec == asio::error::eof) {
         std::cerr << "Connection closed by peer (EOF).\n";
-        if (client_connected_) restart_client_.store(true);
-        socket_.cancel();
-        StartClient();
+        if (client_connected_) {
+            restart_client_.store(true);
+            socket_.cancel();
+            StartClient();
+        }
     } else {
         std::cerr << "Read Error: " << ec.message() << "\n";
-        if (client_connected_) restart_client_.store(true);
-        socket_.cancel();
-        StartClient();
+        if (client_connected_) {
+            restart_client_.store(true);
+            socket_.cancel();
+            StartClient();
+        }
     }
 }
 
