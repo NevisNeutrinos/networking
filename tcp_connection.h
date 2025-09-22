@@ -69,6 +69,8 @@ private:
     asio::steady_timer timer_;
     bool read_in_progress_ = false;
     std::atomic_bool packet_read_ = false;
+    std::atomic_bool reset_read_timer_ = false;
+    std::chrono::time_point<std::chrono::steady_clock> start_;
 
     void StartClient();
     void ClearSocketBuffer();

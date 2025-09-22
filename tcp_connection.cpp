@@ -45,6 +45,8 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     }
     else {
         std::cout << "Starting Receive Client on Address [" << ip_address << "] Port [" << port << "]" << std::endl;
+        if (use_heartbeat) reset_read_timer_ = true;
+        start_ = std::chrono::steady_clock::now();
         StartClient();
     }
 }
@@ -96,9 +98,12 @@ void TCPConnection::StartClient() {
 
     if (socket_.is_open()) {
         std::cout << "Empty and Cancel socket operations" << std::endl;
-        ClearSocketBuffer();
         std::unique_lock<std::mutex> slock(sock_mutex_);
         socket_.cancel();
+        slock.unlock();
+        ClearSocketBuffer();
+        // std::unique_lock<std::mutex> slock(sock_mutex_);
+        slock.lock();
         socket_.close();
         slock.unlock();
         std::cout << "Socket cancelled and closed" << std::endl;
@@ -115,22 +120,12 @@ void TCPConnection::StartClient() {
     tcp_protocol_.RestartDecoder();
     requested_bytes_ = sizeof(TCPProtocol::Header);
 
-    // Set up a timeout (e.g., 3 seconds)
-    timeout_.expires_after(std::chrono::seconds(3));
-    timeout_.async_wait([this](const asio::error_code& ec) {
-        if (!ec) { // Timeout expired
-            std::cerr << "Connection timed out. [" << port_ << "]" << std::endl;
-            // Wait for 2s before trying again
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-            StartClient();
-        }
-    });
     std::cout << "--> Async_connect" << std::endl;
     // Receive command socket
     socket_.async_connect(endpoint_, [this](const asio::error_code& ec) {
         if (!ec) {
-            timeout_.cancel();
             std::cout << "Receive socket connected to server! [" << port_ << "]" << std::endl;
+            timeout_.cancel();
             // Start a thread for reading and writing, these handle ASIO async operations
             // so they don't use a CPU unless data is being processed
             tcp_protocol_.RestartDecoder();
@@ -151,6 +146,19 @@ void TCPConnection::StartClient() {
             std::this_thread::sleep_for(std::chrono::seconds(2));
             StartClient();
         }
+    });
+
+    // Set up a timeout (e.g., 3 seconds)
+    timeout_.expires_after(std::chrono::seconds(5));
+    timeout_.async_wait([this](const asio::error_code& ec) {
+        if (ec == asio::error::operation_aborted) {
+            return; // Timer cancelled, connection completed successfully
+        }
+        // Timeout expired
+        std::cerr << "Connection timed out. [" << port_ << "]" << std::endl;
+        // Wait for 2s before trying again
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        // StartClient();
     });
 }
 
@@ -176,6 +184,9 @@ void TCPConnection::ReadData() {
     if (debug_flag_) std::cout << "Setting read to " << requested_bytes_ << "B " << std::endl;
     if (debug_flag_) std::cout << "io_context_.stopped(): " << io_context_.stopped() << std::endl;
 
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_).count();
+
     asio::async_read( socket_,// Or async_read if you need exactly N bytes
                       asio::buffer(buffer_, requested_bytes_), // Read up to buffer size
                 std::bind(&TCPConnection::ReadHandler, this, std::placeholders::_1, std::placeholders::_2)
@@ -183,12 +194,15 @@ void TCPConnection::ReadData() {
 
     // Timeout in case something happens in the middle of the packet read
     if (!is_server_ && client_connected_ && (packet_read_ || use_heartbeat_) && !monitor_link_) {
+        if (debug_flag_) std::cout << "Resetting read timer [" << reset_read_timer_ << "]" << " (" << elapsed << ")" << std::endl;
         timer_.expires_after(read_timeout);
+        start_ = now;
         timer_.async_wait([this](const asio::error_code& ec) {
             // operation_aborted is the timer cancel. If success that means the timer completed
             if (ec == asio::error::operation_aborted) {
                 return; // Timer cancelled, read completed successfully
             }
+            // timer_.cancel();
             packet_read_ = false;
             std::cerr << "Read timeout or no heartbeat received. Emptying buffer..  EC=" << ec.message() << std::endl;
             // Empty the socket buffer if there's any data in it
@@ -196,7 +210,6 @@ void TCPConnection::ReadData() {
             client_connected_ = false;
             restart_client_.store(true);
             std::cout << "Will try reconnecting...  [" << port_ << "]" << std::endl;
-            // FIXME handle timeout
             socket_.cancel();
             StartClient();
         });
@@ -207,6 +220,8 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
     // std::cout << "[" << port_ << "] RecvB: " << requested_bytes_ << "/" << bytes_transferred << std::endl;
     if (debug_flag_) for (size_t i = 0; i < bytes_transferred; i++) std::cout << std::hex << static_cast<int>(buffer_[i]) << ", ";
     if (debug_flag_) std::cout << std::dec << std::endl;
+
+    reset_read_timer_ = false;
     if (!ec) {
         // If the requested data was read from the socket we can decode it
         if (bytes_transferred == requested_bytes_) {
@@ -222,7 +237,8 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
 
                 if (use_heartbeat_ && recv_command_.command == TCPProtocol::kHeartBeat) {
-                    timer_.expires_after(std::chrono::seconds(1));
+                    // timer_.expires_after(std::chrono::seconds(1));
+                    reset_read_timer_ = true;
                 } else {
                     // Full packet received so place into the queue and notify consumers
                     recv_command_buffer_.emplace_back(recv_command_);
