@@ -89,8 +89,6 @@ private:
     std::condition_variable send_cmd_available_;
     Command recv_command_;
 
-    asio::io_context& io_context_;
-
 };
 
 #endif  // TCP_SERVER_H_
