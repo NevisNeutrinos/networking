@@ -34,6 +34,26 @@ public:
         cmd_available_.notify_all();
     }
 
+    // Functions to help manage the async IO context from python
+    std::thread python_io_context_thread_;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> python_work_guard_;
+    void PythonRun(asio::io_context &ctx) {
+        python_work_guard_ = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(ctx.get_executor());
+        python_io_context_thread_ = std::thread([&ctx]() {
+            try {
+                ctx.run();
+            } catch (const std::exception &e) {
+                std::cerr << "io_context thread exception: " << e.what() << std::endl;
+            }
+        });
+    }
+    void PythonStop(asio::io_context &ctx) {
+        setStopCmdRead(true);
+        ctx.stop();
+        if (python_io_context_thread_.joinable()) python_io_context_thread_.join();
+        python_work_guard_.reset();
+    }
+
 private:
 
     TCPProtocol tcp_protocol_;
@@ -67,9 +87,9 @@ private:
     size_t received_bytes_;
     std::chrono::high_resolution_clock::time_point chrono_read_start_;
     asio::steady_timer timer_;
-    bool read_in_progress_ = false;
-    std::atomic_bool packet_read_ = false;
-    std::atomic_bool reset_read_timer_ = false;
+    bool read_in_progress_{false};
+    std::atomic_bool packet_read_{false};
+    std::atomic_bool reset_read_timer_{false};
     std::chrono::time_point<std::chrono::steady_clock> start_;
 
     void StartClient();
