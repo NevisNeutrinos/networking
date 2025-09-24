@@ -1,5 +1,9 @@
 from setuptools import setup, Extension
 from pybind11.setup_helpers import Pybind11Extension, build_ext
+import os
+
+# Get the current directory
+this_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Define the C++ extension module
 ext_modules = [
@@ -7,9 +11,14 @@ ext_modules = [
         # The name of the module as it will be imported in Python
         "network_module",
         # The source file for the bindings and the C++ implementations
-        ["src/network.cpp"],
+        [
+            os.path.join(this_dir, "src", "network.cpp"),
+            os.path.join(this_dir, "..", "tcp_connection.cpp"),
+            os.path.join(this_dir, "..", "tcp_protocol.cpp"),
+        ],
+        include_dirs=["/home/pgrams/asio-1.30.2/include"],
         # Specify C++11 standard
-        extra_compile_args=["-std=c++11"],
+        extra_compile_args=["-std=c++17"],
         language='c++'
     ),
 ]
