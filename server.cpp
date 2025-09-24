@@ -104,6 +104,7 @@ int main(int argc, char* argv[]) {
                 default:
                     std::cerr << "Invalid input." << std::endl;
             }
+            std::this_thread::sleep_for(std::chrono::seconds(3));
         }
         io_context.stop();
         io_thread.join();

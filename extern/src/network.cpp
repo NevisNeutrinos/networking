@@ -57,7 +57,6 @@ PYBIND11_MODULE(network_module, m) {
         // Bind the 'fill' method
         .def("set_arguments", &Command::SetArguments, "Set the arguments", py::arg("args"));
 
-
 //    // Expose the TCPProtocol class to Python
 //    py::class_<TCPProtocol, Command>(m, "TCPProtocol")
 //        // Bind the constructor
