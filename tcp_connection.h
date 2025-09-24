@@ -82,6 +82,7 @@ private:
     void SendData();
     bool DataInSendBuffer();
     bool DataInRecvBuffer();
+    void SendHeartbeat();
 
     // Creates a blocking wait for commands to
     // become available in the read buffer.

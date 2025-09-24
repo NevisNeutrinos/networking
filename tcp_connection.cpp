@@ -84,6 +84,7 @@ void TCPConnection::StartServer() {
           requested_bytes_ = sizeof(TCPProtocol::Header);
           std::thread(&TCPConnection::ReadData, this).detach();
           std::thread(&TCPConnection::SendData, this).detach();
+          if (use_heartbeat_) std::thread(&TCPConnection::SendHeartbeat, this).detach();
       } else {
           std::cerr << "Client connection failed with error: " << ec.message() << std::endl;
       }
@@ -230,8 +231,9 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
             if (requested_bytes_ == SIZE_MAX) { // end of packet
 
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
-
+                timer_.cancel(); // anything we receive should count as a heartbeat
                 if (use_heartbeat_ && recv_command_.command == TCPProtocol::kHeartBeat) {
+                    std::cout << "Heartbeat received.." << std::endl;
                     // timer_.expires_after(std::chrono::seconds(1));
                     reset_read_timer_ = true;
                 } else {
@@ -327,6 +329,15 @@ void TCPConnection::EchoData() {
         std::lock_guard<std::mutex> lock(recv_mutex_);
         recv_command_buffer_.pop_front();
     }
+}
+
+void TCPConnection::SendHeartbeat() {
+    auto heartbeat = Command(TCPProtocol::kHeartBeat, 0);
+    while (!stop_server_.load() && !stop_cmd_write_.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        WriteSendBuffer(heartbeat);
+    }
+    std::cout << "Ending hearbeat.." << std::endl;
 }
 
 void TCPConnection::WriteSendBuffer(const uint16_t cmd, std::vector<int32_t>& vec) {
