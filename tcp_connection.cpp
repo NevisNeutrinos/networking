@@ -233,7 +233,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
                 timer_.cancel(); // anything we receive should count as a heartbeat
                 if (use_heartbeat_ && recv_command_.command == TCPProtocol::kHeartBeat) {
-                    std::cout << "Heartbeat received.." << std::endl;
+                    if (debug_flag_) std::cout << "Heartbeat received.." << std::endl;
                     // timer_.expires_after(std::chrono::seconds(1));
                     reset_read_timer_ = true;
                 } else {

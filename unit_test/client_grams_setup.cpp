@@ -30,6 +30,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    std::vector<int32_t> stat_words = {0xFACE, 0xA, 0xBAD, 0xCAFE, 0xDEAD, 0xBEEF, 0xDAD, 0xDEED, 0xFAD, 0xDEAF, 0xBAD};
+    int send_period = 1000;
+    if (argc > 4) {
+        stat_words.clear();
+        auto num_status_words = std::stoi(argv[4]);
+        std::cout << "\033[31m Included status words, (num words = " << num_status_words << ") \033[0m" << std::endl;
+        for (int32_t i = 0; i < num_status_words; ++i) stat_words.push_back(i++);
+        // Set the status send period in milliseconds
+        send_period = std::stio(argv[5]);
+    }
+
     std::string ip_address = argv[1];
     uint16_t cmd_port = std::stoi(argv[2]);
     uint16_t monitor_port = std::stoi(argv[3]);
@@ -70,10 +81,10 @@ int main(int argc, char* argv[]) {
             cmd_client.WriteSendBuffer(cmd);
         }
 
-        if (elapsed > 1000) {
+        if (elapsed > send_period) {
             std::cout << "\033[35m Sending fake monitor data.. (" << fakeMetricsSentCount << ") \033[0m" << std::endl;
             Command cmd(0xB0, 2);
-            cmd.arguments = {0xFACE, 0xA, 0xBAD, 0xCAFE, 0xDEAD, 0xBEEF, 0xDAD, 0xDEED, 0xFAD, 0xDEAF, 0xBE, 0xBAD};
+            cmd.arguments = stat_words;
             monitor_client.WriteSendBuffer(cmd);
             start = now; // update the time
             fakeMetricsSentCount++;
