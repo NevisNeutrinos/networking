@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
 
     if (argc < 4) {
         std::cerr << "\033[31mPlease include IP address and port!" << std::endl;
-        std::cerr << "  Usage: " << argv[0] << " <IP address> <Cmd port> <Monitor port>  red\033[0m" << std::endl;
+        std::cerr << "  Usage: " << argv[0] << " <IP address> <Cmd port> <Monitor port> Optional: <NumPacketWords> <SendPeriod> \033[0m" << std::endl;
         return 1;
     }
 
@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
         std::cout << "\033[31m Included status words, (num words = " << num_status_words << ") \033[0m" << std::endl;
         for (int32_t i = 0; i < num_status_words; ++i) stat_words.push_back(i++);
         // Set the status send period in milliseconds
-        send_period = std::stio(argv[5]);
+        send_period = std::stoi(argv[5]);
     }
 
     std::string ip_address = argv[1];
