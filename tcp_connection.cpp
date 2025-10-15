@@ -30,7 +30,8 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
     recv_command_.arguments.reserve(100); // reserve a vector size so we don't have to keep allocating more memory
     if (is_server_) {
         std::cout << "Starting Server on Address [" << ip_address << "] Port [" << port<< "]" << std::endl;
-        std::cout << "PRE Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
+        if (debug_flag_) std::cout << "PRE Acceptor/accept socket value = " << acceptor_.has_value() << " / "
+                                    << accept_socket_.has_value() << std::endl;
         acceptor_.emplace(tcp::acceptor(io_context, endpoint_));
         if (!acceptor_.has_value()) {
             std::cerr << "Acceptor is not initialized!" << std::endl;
@@ -39,7 +40,8 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
         if (!accept_socket_.has_value()) {
             std::cerr << "Accept Socket is not initialized!" << std::endl;
         }
-        std::cout << "Acceptor/accept socket value = " << acceptor_.has_value() << " / " << accept_socket_.has_value() << std::endl;
+        if (debug_flag_) std::cout << "Acceptor/accept socket value = " << acceptor_.has_value() << " / "
+                                    << accept_socket_.has_value() << std::endl;
         StartServer();
     }
     else {
@@ -57,14 +59,14 @@ TCPConnection::~TCPConnection() {
     stop_cmd_write_.store(true);
 
     if (write_data_thread_.joinable()) write_data_thread_.join();
-    std::cout << "Clearing TCP buffers and closing connections ..." << std::endl;
+    if (debug_flag_) std::cout << "Clearing TCP buffers and closing connections ..." << std::endl;
     send_command_buffer_.clear();
     recv_command_buffer_.clear();
 
     if (socket_.is_open()) {
         socket_.cancel(); // cancel all pending async operations
         socket_.close();
-        std::cout << "Closed TCP socket" << std::endl;
+        if (debug_flag_) std::cout << "Closed TCP socket" << std::endl;
     }
 
     std::cout << "Destructed TCP connection [" << port_ << "]" << std::endl;
@@ -86,7 +88,7 @@ void TCPConnection::StartServer() {
           std::thread(&TCPConnection::SendData, this).detach();
           if (use_heartbeat_) std::thread(&TCPConnection::SendHeartbeat, this).detach();
       } else {
-          std::cerr << "Client connection failed with error: " << ec.message() << std::endl;
+          if (debug_flag_) std::cout << "Client connection failed with error: " << ec.message() << std::endl;
       }
       if (!stop_server_.load()) StartServer();  // Accept the next client
     });
@@ -96,7 +98,7 @@ void TCPConnection::StartClient() {
     if (stop_server_.load()) return;
 
     if (socket_.is_open()) {
-        std::cout << "Empty and Cancel socket operations" << std::endl;
+        if (debug_flag_) std::cout << "Empty and Cancel socket operations" << std::endl;
         std::unique_lock<std::mutex> slock(sock_mutex_);
         socket_.cancel();
         slock.unlock();
@@ -104,12 +106,12 @@ void TCPConnection::StartClient() {
         slock.lock();
         socket_.close();
         slock.unlock();
-        std::cout << "Socket cancelled and closed" << std::endl;
+        if (debug_flag_) std::cout << "Socket cancelled and closed" << std::endl;
     }
     if (write_data_thread_.joinable()) {
         stop_cmd_write_.store(true);
         send_cmd_available_.notify_one();
-        std::cout << "Joining write thread before restarting" << std::endl;
+        if (debug_flag_) std::cout << "Joining write thread before restarting" << std::endl;
         write_data_thread_.join();
         stop_cmd_write_.store(false);
     }
@@ -117,8 +119,9 @@ void TCPConnection::StartClient() {
     client_connected_ = false;
     tcp_protocol_.RestartDecoder();
     requested_bytes_ = sizeof(TCPProtocol::Header);
+    received_bytes_ = 0;
 
-    std::cout << "--> Async_connect" << std::endl;
+    if (debug_flag_) std::cout << "--> Async_connect" << std::endl;
     // Receive command socket
     socket_.async_connect(endpoint_, [this](const asio::error_code& ec) {
         if (!ec) {
@@ -137,7 +140,7 @@ void TCPConnection::StartClient() {
             if (write_data_thread_.joinable()) {
                 stop_cmd_write_.store(true);
                 send_cmd_available_.notify_one();
-                std::cout << "Joining write thread before restarting" << std::endl;
+                if (debug_flag_) std::cout << "Joining write thread before restarting" << std::endl;
                 write_data_thread_.join();
                 stop_cmd_write_.store(false);
             }
@@ -153,7 +156,7 @@ void TCPConnection::StartClient() {
             return; // Timer cancelled, connection completed successfully
         }
         // Timeout expired
-        std::cerr << "Connection timed out. [" << port_ << "]" << std::endl;
+        if (debug_flag_) std::cout << "Connection timed out. [" << port_ << "]" << std::endl;
         // Wait for 2s before trying again
         std::this_thread::sleep_for(std::chrono::seconds(2));
         // StartClient();
@@ -170,7 +173,7 @@ void TCPConnection::ClearSocketBuffer() {
         temp_buffer.clear();
     }
     slock.unlock();
-    std::cerr << "Emptied buffer of " << bytes_available << "B" << std::endl;
+    if (debug_flag_) std::cout << "Emptied buffer of " << bytes_available << "B" << std::endl;
 }
 
 void TCPConnection::ReadData() {
@@ -200,12 +203,12 @@ void TCPConnection::ReadData() {
                 return; // Timer cancelled, read completed successfully
             }
             packet_read_ = false;
-            std::cerr << "Read timeout or no heartbeat received. Emptying buffer..  EC=" << ec.message() << std::endl;
+            if (debug_flag_) std::cout << "Read timeout or no heartbeat received. Emptying buffer..  EC=" << ec.message() << std::endl;
             // Empty the socket buffer if there's any data in it
             ClearSocketBuffer();
             client_connected_ = false;
             restart_client_.store(true);
-            std::cout << "Will try reconnecting...  [" << port_ << "]" << std::endl;
+            if (debug_flag_) std::cout << "Will try reconnecting...  [" << port_ << "]" << std::endl;
             socket_.cancel();
             StartClient();
         });
@@ -222,6 +225,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
         // If the requested data was read from the socket we can decode it
         if (bytes_transferred == requested_bytes_) {
             packet_read_ = true;
+            received_bytes_ += bytes_transferred;
             // The DecodePackets uses an internal state machine to iterate through the packet eg, Header, Payload, Footer
             // Returns 0 when the end of the packet frame is reached
             { // scope the mutex to just apply to the decode call since it fills the receiver buffer
@@ -247,34 +251,40 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 chrono_read_start_= std::chrono::high_resolution_clock::now();
 
                 // Send an ack back after receiving a message, for client, command link only
+                // per specification the ack should be the command + num received bytes
                 if (!is_server_ && !monitor_link_ && !recv_command_buffer_.empty()) {
-                    WriteSendBuffer(recv_command_buffer_.back());
+                    std::vector<int32_t> data = { static_cast<int32_t>(received_bytes_) };
+                    WriteSendBuffer(recv_command_buffer_.back().command, data);
                 }
+                received_bytes_ = 0;
             }
             // 2. Initiate the *next* read operation
             ReadData(); // Loop back to wait for more data
         } else {
-            std::cerr << "Requested " << requested_bytes_ << "B  but received " << bytes_transferred << "B"
+            if (debug_flag_) std::cout << "Requested " << requested_bytes_ << "B  but received " << bytes_transferred << "B"
                       << " Starting over" << std::endl;
             // Remove the last element if there is a half-formed command
             if (!recv_command_buffer_.empty()) recv_command_buffer_.pop_back();
             ClearSocketBuffer();
             tcp_protocol_.RestartDecoder();
             requested_bytes_ = sizeof(TCPProtocol::Header);
+            received_bytes_ = 0;
             ReadData(); // Loop back to wait for more data
         }
     } else if (ec == asio::error::eof) {
-        std::cerr << "Connection closed by peer (EOF).\n";
+        if (debug_flag_) std::cout << "Connection closed by peer (EOF).\n";
         if (client_connected_ && !stop_server_.load() && !stop_cmd_write_.load()) {
             restart_client_.store(true);
             socket_.cancel();
+            received_bytes_ = 0;
             StartClient();
         }
     } else {
-        std::cerr << "Read Error: " << ec.message() << " client_connected " << client_connected_ << "\n";
+        if (debug_flag_) std::cout << "Read Error: " << ec.message() << " client_connected " << client_connected_ << "\n";
         if (client_connected_ && !stop_server_.load() && !stop_cmd_write_.load()) {
             restart_client_.store(true);
             socket_.cancel();
+            received_bytes_ = 0;
             StartClient();
         }
     }
@@ -323,7 +333,7 @@ std::vector<Command> TCPConnection::ReadRecvBuffer(size_t num_cmds) {
 }
 
 void TCPConnection::EchoData() {
-    std::cout << "EchoData!" << std::endl;
+    if (debug_flag_) std::cout << "EchoData!" << std::endl;
     while (DataInRecvBuffer()) {
         WriteSendBuffer(ReadRecvBuffer());
         std::lock_guard<std::mutex> lock(recv_mutex_);
@@ -337,7 +347,7 @@ void TCPConnection::SendHeartbeat() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         WriteSendBuffer(heartbeat);
     }
-    std::cout << "Ending hearbeat.." << std::endl;
+    if (debug_flag_) std::cout << "Ending hearbeat.." << std::endl;
 }
 
 void TCPConnection::WriteSendBuffer(const uint16_t cmd, std::vector<int32_t>& vec) {
@@ -378,11 +388,42 @@ void TCPConnection::SendData() {
             if (!ec) {
                 if (debug_flag_) std::cout << "Sent: " << bytes_sent << "B" << std::endl;
             } else {
-                std::cerr << "Send error: " << ec.message() << "\n";
+                if (debug_flag_) std::cerr << "Send error: " << ec.message() << "\n";
                 // if (client_connected_) restart_client_.store(true); //FIXME add something here
             }
         });
         // slock.unlock();
     }
-    std::cout << "Exit SendData" << std::endl;
+    if (debug_flag_) std::cout << "Exit SendData" << std::endl;
+}
+
+Command TCPConnection::DecodeRawPacket(std::vector<uint8_t>& raw_buff) {
+    Command cmd_buffer(0,0);
+    size_t buf_idx = 0;
+
+    // Header
+    requested_bytes_ = TCPProtocol::header_size_;
+    for (size_t i = 0; i < requested_bytes_; i++) {
+        buffer_.at(buf_idx) = raw_buff.at(buf_idx);
+        buf_idx++;
+    }
+    requested_bytes_ = tcp_protocol_.DecodePackets(buffer_, cmd_buffer);
+    // Arguments
+    for (size_t i = 0; i < requested_bytes_; i++) {
+        buffer_.at(buf_idx) = raw_buff.at(buf_idx);
+        buf_idx++;
+    }
+    requested_bytes_ = tcp_protocol_.DecodePackets(buffer_, cmd_buffer);
+    // Footer
+    for (size_t i = 0; i < requested_bytes_; i++) {
+        buffer_.at(buf_idx) = raw_buff.at(buf_idx);
+        buf_idx++;
+    }
+    requested_bytes_ = tcp_protocol_.DecodePackets(buffer_, cmd_buffer);
+    // Reset decoder state machine
+    tcp_protocol_.RestartDecoder();
+    if (requested_bytes_ != SIZE_MAX) {
+        throw std::runtime_error("Invalid requested bytes received");
+    }
+    return cmd_buffer;
 }

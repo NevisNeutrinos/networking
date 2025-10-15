@@ -114,6 +114,10 @@ PYBIND11_MODULE(network_module, m) {
              py::arg("num_cmds"),
              "Read multiple Commands from the receive buffer")
 
+        // f
+        DecodeRawPacket
+    .def("get_socket_is_open", &TCPConnection::getSocketIsOpen)
+
         // socket open check
         .def("get_socket_is_open", &TCPConnection::getSocketIsOpen)
 

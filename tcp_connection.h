@@ -54,6 +54,9 @@ public:
         python_work_guard_.reset();
     }
 
+    // Function to provide access to the decoder without the sockets
+    Command DecodeRawPacket(std::vector<uint8_t>& raw_buff);
+
 private:
 
     TCPProtocol tcp_protocol_;
