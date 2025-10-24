@@ -36,8 +36,11 @@ int main(int argc, char* argv[]) {
         stat_words.clear();
         auto num_status_words = std::stoi(argv[4]);
         std::cout << "\033[31m Included status words, (num words = " << num_status_words << ") \033[0m" << std::endl;
-        for (int32_t i = 0; i < num_status_words; ++i) stat_words.push_back(i++);
+        for (int32_t i = 0; i < num_status_words; i++) stat_words.push_back(i);
         // Set the status send period in milliseconds
+        std::cout << "Sending fake status words:  [";
+        for(auto &w : stat_words) std::cout << w << ",";
+        std::cout << "]" << std::endl;
         send_period = std::stoi(argv[5]);
     }
 
@@ -54,12 +57,14 @@ int main(int argc, char* argv[]) {
     asio::io_context io_context;
     std::cout << "Starting pGRAMS client..." << std::endl;
     TCPConnection cmd_client(io_context, ip_address, cmd_port, false, true, false);
+    // FIXME taking up too much IO context bandwidth/blocking when reconnecting?
     TCPConnection monitor_client(io_context, ip_address, monitor_port, false, false, true);
     std::cout << "Starting IO Context..." << std::endl;
 
     // Guard to keep IO contex from completely before we want to quit
     asio::executor_work_guard<asio::io_context::executor_type> work_guard(io_context.get_executor());
     std::thread io_thread([&]() { io_context.run(); });
+    std::thread io_thread2([&]() { io_context.run(); });
 
     while (keepRunning.load()) {
         // Get the current time, we want to check so we can send fake monitoring data at 1Hz
@@ -78,12 +83,12 @@ int main(int argc, char* argv[]) {
             std::cout << "******************************" << std::endl;
 
             // Echo back the command
-            cmd_client.WriteSendBuffer(cmd);
+//            cmd_client.WriteSendBuffer(cmd);
         }
 
         if (elapsed > send_period) {
             std::cout << "\033[35m Sending fake monitor data.. (" << fakeMetricsSentCount << ") \033[0m" << std::endl;
-            Command cmd(0xB0, 2);
+            Command cmd(0xFFF, 2);
             cmd.arguments = stat_words;
             monitor_client.WriteSendBuffer(cmd);
             start = now; // update the time
@@ -104,4 +109,5 @@ int main(int argc, char* argv[]) {
     std::cout << "Stopping client!" << std::endl;
     io_context.stop();
     io_thread.join();
+    io_thread2.join();
 }

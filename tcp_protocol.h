@@ -108,7 +108,7 @@ public:
     void RestartDecoder() { decode_state_ = kHeader; }
     uint16_t GetDecoderState() const { return static_cast<uint16_t>(decode_state_); }
 
-    constexpr static size_t RECVBUFFSIZE = 10000;
+    constexpr static size_t RECVBUFFSIZE = 1000000;
     size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Command &recv_cmd);
     // std::vector<uint8_t> Serialize();
     // TCPProtocol Deserialize(std::vector<uint8_t> &data);
