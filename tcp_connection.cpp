@@ -381,11 +381,15 @@ void TCPConnection::WriteSendBuffer(const uint16_t cmd, std::vector<int32_t>& ve
 }
 
 void TCPConnection::WriteSendBuffer(const Command& cmd_struct) {
-    std::unique_lock<std::mutex> lock(send_mutex_);
-    send_command_buffer_.emplace_back(cmd_struct);
-    lock.unlock();
+    if(!is_server_ && !client_connected_) {
+        std::cout << "Client not connected, dropping message" << std::endl;
+    } else {
+        std::unique_lock<std::mutex> lock(send_mutex_);
+        send_command_buffer_.emplace_back(cmd_struct);
+        lock.unlock();
+        send_cmd_available_.notify_one();
+    }
     if (debug_flag_) std::cout << "Send cmd: " << cmd_struct.command << "/" << cmd_struct.arguments.size() << std::endl;
-    send_cmd_available_.notify_one();
 }
 
 // Current function 09/16

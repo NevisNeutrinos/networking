@@ -71,11 +71,11 @@ void MonitorServer(TCPConnection &cmd_server, TCPConnection &monitor_server) {
             std::cout << "]" << std::dec << std::endl;
             std::cout << "******************************" << std::endl;
 
-            // Echo back the number of bytes received
-            int32_t num_bytes = cmd.arguments.size() * sizeof(int32_t);
-            Command reply(0x5, 1);
-            reply.arguments = {num_bytes};
-            monitor_server.WriteSendBuffer(reply);
+            // Echo back the number of bytes received --> no longer specification 10/23
+//            int32_t num_bytes = cmd.arguments.size() * sizeof(int32_t);
+//            Command reply(0x5, 1);
+//            reply.arguments = {num_bytes};
+//            monitor_server.WriteSendBuffer(reply);
             if (cmd.command == 0xB0) {
                 std::cout << "\033[35m Received Fake Metrics Count=" << fakeMetricsRecvCount << "\033[0m" << std::endl;
                 fakeMetricsRecvCount++;
