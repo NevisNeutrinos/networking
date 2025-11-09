@@ -24,6 +24,7 @@ public:
     // Interface to send/receive commands and data
     void WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec);
     void WriteSendBuffer(const Command& cmd_struct);
+    void WriteRecvBuffer(const Command& cmd_struct);
 
     Command ReadRecvBuffer();
     std::vector<Command> ReadRecvBuffer(size_t num_cmds);

@@ -4,6 +4,8 @@
 #include "../tcp_connection.h"
 #include <iostream>
 #include <csignal>
+#include <thread>
+#include <chrono>
 
 std::atomic<bool> keepRunning(true);
 size_t fakeMetricsSentCount = 0;
@@ -70,6 +72,7 @@ int main(int argc, char* argv[]) {
         // Get the current time, we want to check so we can send fake monitoring data at 1Hz
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         // If a command is received
         if (!cmd_client.recv_command_buffer_.empty()) {

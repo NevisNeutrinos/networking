@@ -249,12 +249,14 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
                 timer_.cancel(); // anything we receive should count as a heartbeat
                 if (use_heartbeat_ && recv_command_.command == TCPProtocol::kHeartBeat) {
-                    if (debug_flag_) std::cout << "Heartbeat received.." << std::endl;
+                    // if (debug_flag_)
+                    std::cout << "Heartbeat received.." << std::endl;
                     // timer_.expires_after(std::chrono::seconds(1));
                     reset_read_timer_ = true;
+                    WriteRecvBuffer(recv_command_);
                 } else {
                     // Full packet received so place into the queue and notify consumers
-                    recv_command_buffer_.emplace_back(recv_command_);
+                    WriteRecvBuffer(recv_command_);
                     cmd_available_.notify_all();
                 }
 
@@ -264,9 +266,14 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
 
                 // Send an ack back after receiving a message, for client, command link only
                 // per specification the ack should be the command + num received bytes
-                if (!is_server_ && !monitor_link_ && !recv_command_buffer_.empty()) {
+                if (!is_server_ && !monitor_link_ && DataInRecvBuffer()) {
                     std::vector<int32_t> data = { static_cast<int32_t>(received_bytes_) };
-                    WriteSendBuffer(recv_command_buffer_.back().command, data);
+                    {
+                        std::lock_guard<std::mutex> lock(recv_mutex_);
+                        std::cout << "Sent ACK" << recv_command_buffer_.back().command << "/" << data.at(0) << std::endl;
+                        WriteSendBuffer(recv_command_buffer_.back().command, data);
+                        if (TCPProtocol::kHeartBeat == recv_command_buffer_.back().command) recv_command_buffer_.pop_back();
+                    }
                 }
                 received_bytes_ = 0;
             }
@@ -277,8 +284,13 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
         } else { // did not receive requested bytes
             if (debug_flag_) std::cout << "Requested " << requested_bytes_ << "B  but received " << bytes_transferred << "B"
                       << " Starting over" << std::endl;
-            // Remove the last element if there is a half-formed command
-            if (!recv_command_buffer_.empty()) recv_command_buffer_.pop_back();
+            // Remove the last element if there is an incomplete packet
+            if (DataInRecvBuffer()) {
+                {
+                    std::lock_guard<std::mutex> lock(recv_mutex_);
+                    recv_command_buffer_.pop_back();
+                }
+            }
             received_bytes_ = 0;
             // Never should receive data for status link, should end with 0B read if lost conenction
             if (monitor_link_ && requested_bytes_ == 0) {
@@ -351,7 +363,10 @@ std::vector<Command> TCPConnection::ReadRecvBuffer(size_t num_cmds) {
     commands.reserve(num_reads);
 
     for (size_t i = 0; i < num_reads; i++) {
-        commands.push_back(ReadRecvBuffer());
+        auto cmd = ReadRecvBuffer();
+        // This shouldn't happen but if a heartbeat were to make it here we want to drop it
+        if(cmd.command == TCPProtocol::kHeartBeat) continue;
+        commands.push_back(cmd);
     }
     return commands;
 }
@@ -390,6 +405,11 @@ void TCPConnection::WriteSendBuffer(const Command& cmd_struct) {
         send_cmd_available_.notify_one();
     }
     if (debug_flag_) std::cout << "Send cmd: " << cmd_struct.command << "/" << cmd_struct.arguments.size() << std::endl;
+}
+
+void TCPConnection::WriteRecvBuffer(const Command& cmd_struct) {
+    std::lock_guard<std::mutex> lock(recv_mutex_);
+    recv_command_buffer_.emplace_back(cmd_struct);
 }
 
 // Current function 09/16

@@ -108,6 +108,8 @@ public:
     void RestartDecoder() { decode_state_ = kHeader; }
     uint16_t GetDecoderState() const { return static_cast<uint16_t>(decode_state_); }
 
+    // Make sure the receiver buffer is large enough to hold at least the max size packet 
+    // allowed by protocol approx. 2^16 4B words = 262kB (setting to 1MB ~ 3.5 packets)
     constexpr static size_t RECVBUFFSIZE = 1000000;
     size_t DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Command &recv_cmd);
     // std::vector<uint8_t> Serialize();
@@ -148,10 +150,12 @@ public:
             std::memcpy(buffer.data() + offset, data, size);
             offset += size;
         };
+        // Header
         uint16_t tmp16 = htons(start_code1);
         Append(&tmp16, sizeof(start_code1));
         tmp16 = htons(start_code2);
         Append(&tmp16, sizeof(start_code2));
+
         tmp16 = htons(command);
         Append(&tmp16, sizeof(command));
         tmp16 = htons(arg_count);
@@ -164,6 +168,7 @@ public:
         crc = CalcCRC(buffer, header_content_bytes);
         tmp16 = htons(crc);
         Append(&tmp16, sizeof(crc));
+        // Footer
         tmp16 = htons(end_code1);
         Append(&tmp16, sizeof(end_code1));
         tmp16 = htons(end_code2);
