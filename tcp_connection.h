@@ -25,6 +25,8 @@ public:
     void WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec);
     void WriteSendBuffer(const Command& cmd_struct);
     void WriteRecvBuffer(const Command& cmd_struct);
+    bool DataInSendBuffer();
+    bool DataInRecvBuffer();
 
     Command ReadRecvBuffer();
     std::vector<Command> ReadRecvBuffer(size_t num_cmds);
@@ -104,8 +106,6 @@ private:
     void ReadData();
     void EchoData();
     void SendData();
-    bool DataInSendBuffer();
-    bool DataInRecvBuffer();
     void SendHeartbeat();
 
     // Creates a blocking wait for commands to

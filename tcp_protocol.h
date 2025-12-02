@@ -79,6 +79,11 @@ public:
     struct Header {
         uint16_t start_code1;
         uint16_t start_code2;
+        // uint16_t cmd_code;
+        // uint16_t arg_count;
+    };
+
+    struct CommandArg {
         uint16_t cmd_code;
         uint16_t arg_count;
     };
@@ -91,6 +96,7 @@ public:
 
     // Heart beat command
     static constexpr uint16_t kHeartBeat = 0xFFFF;
+    static constexpr uint32_t kCorruptData = 0xFFFFFFFF;
 
     // static uint16_t CalcCRC(std::vector<uint8_t> &pbuffer, size_t num_bytes, uint16_t crc = 0);
     // static uint16_t CalcCRC(const uint8_t *pbuffer, size_t num_bytes, uint16_t crc = 0);
@@ -246,6 +252,7 @@ private:
 
     enum PacketDecoderStates {
         kHeader,
+        kCommandArg,
         kArgs,
         kFooter
     };
