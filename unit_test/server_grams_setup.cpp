@@ -61,7 +61,7 @@ void SendHeartbeat(TCPConnection &server) {
 
 void MonitorServer(TCPConnection &cmd_server, TCPConnection &monitor_server) {
     while (keepRunning.load()) {
-        if (!monitor_server.recv_command_buffer_.empty()) {
+        if (monitor_server.DataInRecvBuffer()) {
             // If monitoring data is received, read the command and print it
             Command cmd = monitor_server.ReadRecvBuffer();
             std::cout << "************** Server Monitor Link ****************" << std::endl;
@@ -78,7 +78,7 @@ void MonitorServer(TCPConnection &cmd_server, TCPConnection &monitor_server) {
             }
         }
 
-        if (!cmd_server.recv_command_buffer_.empty()) {
+        if (cmd_server.DataInRecvBuffer()) {
             // If monitoring data is received, read the command and print it
             Command cmd = cmd_server.ReadRecvBuffer();
             std::cout << "************** Server Command Link ****************" << std::endl;

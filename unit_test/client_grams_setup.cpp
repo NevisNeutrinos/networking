@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         // If a command is received
-        if (!cmd_client.recv_command_buffer_.empty()) {
+        if (cmd_client.DataInRecvBuffer()) {
             // Read the command and print it
             Command cmd = cmd_client.ReadRecvBuffer();
             std::cout << "************** Client Command Link ****************" << std::endl;
@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
             fakeMetricsSentCount++;
         }
 
-        if (!monitor_client.recv_command_buffer_.empty()) {
+        if (monitor_client.DataInRecvBuffer()) {
             // Read the command and print it
             Command cmd = monitor_client.ReadRecvBuffer();
             std::cout << "************ Client Monitor Link ***************" << std::endl;
