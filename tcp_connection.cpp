@@ -241,6 +241,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
             if (requested_bytes_ == TCPProtocol::kCorruptData) { // 0xFFFFFFFF
                 timer_.cancel(); // cancel the wait since we are receiving data just corrupted
                 requested_bytes_ = sizeof(TCPProtocol::Header);
+                tcp_protocol_.RestartDecoder(); // make sure to set the state machine to expect a header
                 received_bytes_ = 0;
             } else if (requested_bytes_ == SIZE_MAX) { // end of good packet
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
