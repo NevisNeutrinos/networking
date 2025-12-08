@@ -57,23 +57,23 @@ PYBIND11_MODULE(network_module, m) {
         // Bind the 'fill' method
         .def("set_arguments", &Command::SetArguments, "Set the arguments", py::arg("args"));
 
-//    // Expose the TCPProtocol class to Python
-//    py::class_<TCPProtocol, Command>(m, "TCPProtocol")
-//        // Bind the constructor
-//        .def(py::init<uint16_t, size_t>(),
-//             py::arg("cmd_code"), py::arg("arg_count"))
-//
-//        // Bind the 'serialize' and 'deserialize' methods
-//        .def("serialize", &TCPProtocol::Serialize, "Serializes the packet to a list of bytes")
-//        .def("deserialize", &TCPProtocol::Deserialize, "De-Serializes the packet")
-//
-//        // Expose public member variables as read-only properties in Python
-//        .def_readwrite("arg_count", &TCPProtocol::arg_count)
-//
-//        .def_property_readonly_static("kStartCode1", [](py::object /* self */) { return TCPProtocol::kStartCode1; })
-//        .def_property_readonly_static("kStartCode2", [](py::object /* self */) { return TCPProtocol::kStartCode2; })
-//        .def_property_readonly_static("kEndCode1", [](py::object /* self */) { return TCPProtocol::kEndCode1; })
-//        .def_property_readonly_static("kEndCode2", [](py::object /* self */) { return TCPProtocol::kEndCode2; });
+    // Expose the TCPProtocol class to Python
+    py::class_<TCPProtocol, std::shared_ptr<TCPProtocol>, Command>(m, "TCPProtocol")
+        // Bind the constructor
+        .def(py::init<uint16_t, size_t>(),
+             py::arg("cmd_code"), py::arg("arg_count"))
+
+        // Bind the 'serialize' and 'deserialize' methods
+        .def("serialize", &TCPProtocol::Serialize, "Serializes the packet to a list of bytes")
+        .def("deserialize", &TCPProtocol::Deserialize, "De-Serializes the packet")
+
+        // Expose public member variables as read-only properties in Python
+        .def_readwrite("arg_count", &TCPProtocol::arg_count)
+
+        .def_property_readonly_static("kStartCode1", [](py::object /* self */) { return TCPProtocol::kStartCode1; })
+        .def_property_readonly_static("kStartCode2", [](py::object /* self */) { return TCPProtocol::kStartCode2; })
+        .def_property_readonly_static("kEndCode1", [](py::object /* self */) { return TCPProtocol::kEndCode1; })
+        .def_property_readonly_static("kEndCode2", [](py::object /* self */) { return TCPProtocol::kEndCode2; });
 
 
     py::class_<TCPConnection, std::shared_ptr<TCPConnection>, Command>(m, "TCPConnection")

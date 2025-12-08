@@ -50,7 +50,6 @@ public:
     static constexpr size_t footer_size_ = 6;
 
     // Constructor
-    // TCPProtocol(uint16_t cmd, size_t vec_size);
     TCPProtocol(const uint16_t cmd, const size_t vec_size) :
     Command(cmd, vec_size),
     arg_count(vec_size),
