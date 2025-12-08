@@ -76,18 +76,22 @@ void MonitorServer(TCPConnection &cmd_server, TCPConnection &monitor_server) {
                 std::cout << "\033[35m Received Fake Metrics Count=" << fakeMetricsRecvCount << "\033[0m" << std::endl;
                 fakeMetricsRecvCount++;
             }
+            PrintState();
         }
 
         if (cmd_server.DataInRecvBuffer()) {
             // If monitoring data is received, read the command and print it
             Command cmd = cmd_server.ReadRecvBuffer();
-            std::cout << "************** Server Command Link ****************" << std::endl;
-            std::cout << std::hex << cmd.command << ": ";
-            std::cout << "[";
-            for (auto &arg : cmd.arguments) { std::cout << arg << ", "; }
-            std::cout << "]" << std::dec << std::endl;
-            std::cout << "******************************" << std::endl;
-            // No reply sent for command link
+            if (cmd.command != TCPProtocol::kHeartBeat) {
+                std::cout << "************** Server Command Link ****************" << std::endl;
+                std::cout << std::hex << cmd.command << ": ";
+                std::cout << "[";
+                for (auto &arg : cmd.arguments) { std::cout << arg << ", "; }
+                std::cout << "]" << std::dec << std::endl;
+                std::cout << "******************************" << std::endl;
+               // No reply sent for command link
+               PrintState();
+            }
         }
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
