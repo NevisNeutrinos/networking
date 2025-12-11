@@ -184,7 +184,7 @@ public:
         return buffer;
     }
 
-    TCPProtocol Deserialize(std::vector<uint8_t> &data) {
+    Command Deserialize(std::vector<uint8_t> &data) {
 
         if (data.size() % 2 != 0) {
             throw std::runtime_error("Invalid data size for deserialization.");
@@ -210,7 +210,8 @@ public:
         uint16_t arg_count = pbuffer.at(word_count++);
 
         // We need to know how many args to initialize the packet
-        TCPProtocol packet(cmd_code, arg_count);
+        // TCPProtocol packet(cmd_code, arg_count);
+        Command packet(cmd_code, arg_count);
 
         // The args are 32b so cast 16b vector to 32b
         int32_t* p_start32 = reinterpret_cast<int32_t*>(data.data());
