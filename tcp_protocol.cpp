@@ -79,7 +79,7 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Co
             }
             if (debug) PrintPacket(recv_cmd);
             decode_state_ = kHeader;
-            if (debug) std::cout << "CRC: " << ntohs(footer->crc) << std::endl;
+            if (debug) std::cout << "CRC received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
             if (debug) std::cout << "EndCode: " << ntohs(footer->end_code1) << " / " << ntohs(footer->end_code2) << std::endl;
             return SIZE_MAX; // end of packet
         }
