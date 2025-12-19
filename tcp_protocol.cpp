@@ -53,10 +53,10 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Co
             if (debug)  std::cout << "Recv Cmd: " << ntohs(cmd_arg->cmd_code) << std::endl;
             if (debug)  std::cout << "Arg Count: " << decoder_arg_count_ << std::endl;
             decode_state_ = kArgs;
-            return sizeof(int32_t) * decoder_arg_count_;
+            return sizeof(uint32_t) * decoder_arg_count_;
         }
         case kArgs: {
-            calc_crc_ = CalcCRC(pbuffer.data(), sizeof(int32_t) * decoder_arg_count_, calc_crc_);
+            calc_crc_ = CalcCRC(pbuffer.data(), sizeof(uint32_t) * decoder_arg_count_, calc_crc_);
             const auto *buf_ptr_32 = reinterpret_buffer<uint32_t>(&pbuffer);
             // We already have the Command packet with the correct number of args, now just fill it
             for (size_t i = 0; i < decoder_arg_count_; i++) {

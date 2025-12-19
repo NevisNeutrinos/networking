@@ -22,7 +22,7 @@ public:
     std::deque<Command> recv_command_buffer_;
 
     // Interface to send/receive commands and data
-    void WriteSendBuffer(uint16_t cmd, std::vector<int32_t>& vec);
+    void WriteSendBuffer(uint16_t cmd, std::vector<uint32_t> &vec);
     void WriteSendBuffer(const Command& cmd_struct);
     void WriteRecvBuffer(const Command& cmd_struct);
     bool DataInSendBuffer();

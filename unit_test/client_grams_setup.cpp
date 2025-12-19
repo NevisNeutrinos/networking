@@ -32,13 +32,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::vector<int32_t> stat_words = {0xFACE, 0xA, 0xBAD, 0xCAFE, 0xDEAD, 0xBEEF, 0xDAD, 0xDEED, 0xFAD, 0xDEAF, 0xBAD};
+    std::vector<uint32_t> stat_words = {0xFACE, 0xA, 0xBAD, 0xCAFE, 0xDEAD, 0xBEEF, 0xDAD, 0xDEED, 0xFAD, 0xDEAF, 0xBAD};
     int send_period = 1000;
     if (argc > 4) {
         stat_words.clear();
         auto num_status_words = std::stoi(argv[4]);
         std::cout << "\033[31m Included status words, (num words = " << num_status_words << ") \033[0m" << std::endl;
-        for (int32_t i = 0; i < num_status_words; i++) stat_words.push_back(i);
+        for (uint32_t i = 0; i < num_status_words; i++) stat_words.push_back(i);
         // Set the status send period in milliseconds
         std::cout << "Sending fake status words:  [";
         for(auto &w : stat_words) std::cout << w << ",";

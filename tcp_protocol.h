@@ -19,12 +19,12 @@ class Command {
 public:
 
     uint16_t command;
-    std::vector<int32_t> arguments;
+    std::vector<uint32_t> arguments;
 
     Command(const uint16_t cmd, const size_t vec_size) : command(cmd), arguments(vec_size) {}
 
     // Public setter for the arguemnts of the packet
-    void SetArguments(const std::vector<int32_t> &args) { arguments = std::move(args); };
+    void SetArguments(const std::vector<uint32_t> &args) { arguments = args; };
 
     void print() {
         std::cout << "Command:      " << command << " \n";
@@ -70,7 +70,7 @@ public:
     uint16_t start_code2;
     // command, from Command class
     uint16_t arg_count;
-    // std::vector<int32_t> arguments, from Command class
+    // std::vector<uint32_t> arguments, from Command class
     uint16_t crc;
     uint16_t end_code1;
     uint16_t end_code2;
@@ -147,7 +147,7 @@ public:
         std::vector<uint8_t> buffer;
         //std::cout << "Serialize nArgs: " << arguments.size() << std::endl;
         // Header + arguments + footer
-        size_t header_content_bytes = header_size_ + arguments.size() * sizeof(int32_t);
+        size_t header_content_bytes = header_size_ + arguments.size() * sizeof(uint32_t);
         buffer.resize(header_content_bytes + footer_size_);
 
         size_t offset = 0;
@@ -166,7 +166,7 @@ public:
         tmp16 = htons(arg_count);
         Append(&tmp16, sizeof(arg_count));
         uint32_t tmp32;
-        for (int32_t arg : arguments) {
+        for (uint32_t arg : arguments) {
             tmp32 = htonl(arg);
             Append(&tmp32, sizeof(arg));
         }
@@ -214,9 +214,9 @@ public:
         Command packet(cmd_code, arg_count);
 
         // The args are 32b so cast 16b vector to 32b
-        int32_t* p_start32 = reinterpret_cast<int32_t*>(data.data());
+        uint32_t* p_start32 = reinterpret_cast<uint32_t*>(data.data());
         p_start32 += word_count / 2;
-        std::vector<int32_t> arg_buffer(p_start32, p_start32 + arg_count);
+        std::vector<uint32_t> arg_buffer(p_start32, p_start32 + arg_count);
         for (auto &word : arg_buffer) { word = ntohl(word); }
 
         packet.SetArguments(arg_buffer);
@@ -248,7 +248,7 @@ private:
 
     size_t num_bytes_;
     uint16_t calc_crc_;
-    u_int16_t decoder_arg_count_;
+    uint16_t decoder_arg_count_;
 
     enum PacketDecoderStates {
         kHeader,

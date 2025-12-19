@@ -101,7 +101,7 @@ TEST_F(TCPProtocolTest, SerializeWithArgs) {
 
     std::vector<uint8_t> serialized_data = protocol.Serialize();
 
-    EXPECT_GE(serialized_data.size(), protocol.header_size_ + arg_count*sizeof(int32_t) + protocol.footer_size_);
+    EXPECT_GE(serialized_data.size(), protocol.header_size_ + arg_count*sizeof(uint32_t) + protocol.footer_size_);
 
     // Verify start codes
     EXPECT_EQ(serialized_data[0], TCPProtocol::kStartCode1);
@@ -116,8 +116,8 @@ TEST_F(TCPProtocolTest, SerializeWithArgs) {
     EXPECT_EQ(received_argCount,arg_count);
 
     //Verify arguments
-    int32_t arg1 = (serialized_data[9] << 24) | (serialized_data[8] << 16) | (serialized_data[7] << 8) | serialized_data[6];
-    int32_t arg2 = (serialized_data[13] << 24) | (serialized_data[12] << 16) | (serialized_data[11] << 8) | serialized_data[10];
+    uint32_t arg1 = (serialized_data[9] << 24) | (serialized_data[8] << 16) | (serialized_data[7] << 8) | serialized_data[6];
+    uint32_t arg2 = (serialized_data[13] << 24) | (serialized_data[12] << 16) | (serialized_data[11] << 8) | serialized_data[10];
     EXPECT_EQ(arg1, protocol.arguments[0]);
     EXPECT_EQ(arg2, protocol.arguments[1]);
 

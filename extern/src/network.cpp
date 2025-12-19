@@ -85,10 +85,10 @@ PYBIND11_MODULE(network_module, m) {
              py::arg("use_heartbeat"),
              py::arg("monitor_link"))
 
-        // WriteSendBuffer(uint16_t, std::vector<int32_t>&)
-        .def("write_send_buffer", [](TCPConnection &self, uint16_t cmd, const std::vector<int32_t> &vec) {
+        // WriteSendBuffer(uint16_t, std::vector<uint32_t>&)
+        .def("write_send_buffer", [](TCPConnection &self, uint16_t cmd, const std::vector<uint32_t> &vec) {
                  // copy is fine since Python -> C++ conversion yields a temporary anyway
-                 std::vector<int32_t> copy = vec;
+                 std::vector<uint32_t> copy = vec;
                  self.WriteSendBuffer(cmd, copy);
              },
              py::arg("cmd"), py::arg("args"))

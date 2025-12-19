@@ -14,7 +14,7 @@ END_CODE2 = 0xD279
 
 # Example values
 command_code = 0x3344
-arguments = [123456, -654321, 789012]  # Example int32_t arguments
+arguments = [123456, -654321, 789012]  # Example uint32_t arguments
 arg_count = len(arguments)
 
 # Pack the data in big-endian format by using ">"

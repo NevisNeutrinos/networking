@@ -15,7 +15,7 @@ void PrintState() {
     std::cout << "Enter choice: ";
 }
 
-int GetUserInput() {
+uint32_t GetUserInput() {
     int choice;
     std::cin >> choice;
 
@@ -29,8 +29,8 @@ int GetUserInput() {
     return choice;
 }
 
-std::vector<int32_t> GetUserInputList() {
-    std::vector<int32_t> numbers;
+std::vector<uint32_t> GetUserInputList() {
+    std::vector<uint32_t> numbers;
     std::string line;
     std::cout << "Enter numbers in one line: ";
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
 
         while (client.getSocketIsOpen()) {
             PrintState();
-            int input = GetUserInput();
+            uint32_t input = GetUserInput();
 
             if (input == -1) {
                 std::cout << "Exiting...\n";
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
                     std::cout << "Enter Cmd:  ";
                     auto cmd = static_cast<uint16_t>(GetUserInput());
                     std::cout << "Enter Arg: \n";
-                    std::vector<int> args = GetUserInputList();
+                    std::vector<uint32_t> args = GetUserInputList();
                     std::cout << "Sending command" << std::endl;
                     client.WriteSendBuffer(cmd, args);
                     break;

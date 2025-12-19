@@ -265,7 +265,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 // Send an ack back after receiving a message, for client, command link only
                 // per specification the ack should be the command + num received bytes
                 if (!is_server_ && !monitor_link_ && DataInRecvBuffer()) {
-                    std::vector<int32_t> data = { static_cast<int32_t>(received_bytes_) };
+                    std::vector<uint32_t> data = { static_cast<uint32_t>(received_bytes_) };
                     {
                         std::lock_guard<std::mutex> lock(recv_mutex_);
                         WriteSendBuffer(recv_command_buffer_.back().command, data);
@@ -382,7 +382,7 @@ void TCPConnection::SendHeartbeat() {
     if (debug_flag_) std::cout << "Ending hearbeat.." << std::endl;
 }
 
-void TCPConnection::WriteSendBuffer(const uint16_t cmd, std::vector<int32_t>& vec) {
+void TCPConnection::WriteSendBuffer(const uint16_t cmd, std::vector<uint32_t>& vec) {
     Command cmd_packet(cmd, vec.size());
     if (!vec.empty()) cmd_packet.arguments = std::move(vec);
     WriteSendBuffer(cmd_packet);
