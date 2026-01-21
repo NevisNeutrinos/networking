@@ -53,34 +53,38 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Co
             if (debug)  std::cout << "Recv Cmd: " << ntohs(cmd_arg->cmd_code) << std::endl;
             if (debug)  std::cout << "Arg Count: " << decoder_arg_count_ << std::endl;
             decode_state_ = kArgs;
-            return sizeof(uint32_t) * decoder_arg_count_;
+            return sizeof(uint32_t) * decoder_arg_count_ + sizeof(Footer);
         }
         case kArgs: {
+            if (pbuffer.size() < (decoder_arg_count_ * sizeof(uint32_t) + sizeof(Footer))) return kCorruptData;
             calc_crc_ = CalcCRC(pbuffer.data(), sizeof(uint32_t) * decoder_arg_count_, calc_crc_);
-            const auto *buf_ptr_32 = reinterpret_buffer<uint32_t>(&pbuffer);
+
             // We already have the Command packet with the correct number of args, now just fill it
+            size_t buff_idx = 0;
+            uint32_t word32 = 0;
             for (size_t i = 0; i < decoder_arg_count_; i++) {
-                recv_cmd.arguments[i] = ntohl(buf_ptr_32[i]);
+                std::memcpy(&word32, &pbuffer[i * sizeof(uint32_t)], sizeof(uint32_t));
+                recv_cmd.arguments[i] = ntohl(word32);
+                buff_idx += sizeof(uint32_t);
             }
-            decode_state_ = kFooter;
-            return sizeof(Footer);
-        }
-        case kFooter: {
-            const auto *footer = reinterpret_buffer<Footer>(&pbuffer);
-            if (ntohs(footer->crc) != calc_crc_) {
-                std::cerr << "Bad CRC! Received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
+            std::cout << "Arg Count: " << decoder_arg_count_ << " buf_idx: " << buff_idx << "/" << sizeof(Footer) << std::endl;
+            Footer footer{};
+            std::memcpy(&footer, &pbuffer[buff_idx], sizeof(Footer));
+
+            if (ntohs(footer.crc) != calc_crc_) {
+                std::cerr << "Bad CRC! Received [" << ntohs(footer.crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
                 // return corrupt flag and wait for a header
                 return kCorruptData;
             }
-            if(!GoodEndCode(ntohs(footer->end_code1), ntohs(footer->end_code2))) {
-                std::cerr << "Bad end code! [" << footer->end_code1 << "] ["<< footer->end_code2 << "]" << std::endl;
+            if(!GoodEndCode(ntohs(footer.end_code1), ntohs(footer.end_code2))) {
+                std::cerr << "Bad end code! [" << footer.end_code1 << "] ["<< footer.end_code2 << "]" << std::endl;
                 // return corrupt flag and wait for a header
                 return kCorruptData;
             }
             if (debug) PrintPacket(recv_cmd);
             decode_state_ = kHeader;
-            if (debug) std::cout << "CRC received [" << ntohs(footer->crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
-            if (debug) std::cout << "EndCode: " << ntohs(footer->end_code1) << " / " << ntohs(footer->end_code2) << std::endl;
+            if (debug) std::cout << "CRC received [" << ntohs(footer.crc) << "] Calculated [" << calc_crc_ << "]"  << std::endl;
+            if (debug) std::cout << "EndCode: " << ntohs(footer.end_code1) << " / " << ntohs(footer.end_code2) << std::endl;
             return SIZE_MAX; // end of packet
         }
         default: {
