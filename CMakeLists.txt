@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(GramsNetworkConnection)
 
 set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_BUILD_TYPE Debug)
 
 # Try to catch any potential problems at compile time
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -12,7 +13,7 @@ endif()
 # note it does not require BOOST
 file(GLOB ASIO_SEARCH_CUSTOM_PATH "$ENV{HOME}/asio*/include")
 find_path(ASIO_INCLUDE_DIR asio.hpp
-    HINTS $ENV{HOME}/asio*/include NO_DEFAULT_PATH)
+          HINTS ${ASIO_SEARCH_CUSTOM_PATH} NO_DEFAULT_PATH)
 
 if (ASIO_INCLUDE_DIR)
     message(STATUS "[networking] Found ASIO: ${ASIO_INCLUDE_DIR}")

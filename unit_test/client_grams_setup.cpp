@@ -91,8 +91,9 @@ int main(int argc, char* argv[]) {
 
         if (elapsed > send_period) {
             std::cout << "\033[35m Sending fake monitor data.. (" << fakeMetricsSentCount << ") \033[0m" << std::endl;
-            Command cmd(0xFFF, stat_words.size());
-            cmd.arguments = stat_words;
+            Command cmd(0xFFF, stat_words.size() + 1);
+            cmd.arguments.at(0) = fakeMetricsSentCount;
+            for (size_t i = 0; i < stat_words.size(); i++) cmd.arguments.at(i+1) = stat_words.at(i);
             monitor_client.WriteSendBuffer(cmd);
             start = now; // update the time
             fakeMetricsSentCount++;
