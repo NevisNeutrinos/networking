@@ -16,7 +16,7 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       use_heartbeat_(use_heartbeat),
       is_server_(is_server),
       monitor_link_(monitor_link),
-      debug_flag_(false),
+      debug_flag_(false,
       restart_client_(false),
       received_bytes_(0),
       timer_(io_context),
@@ -249,6 +249,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 requested_bytes_ = sizeof(TCPProtocol::Header);
                 tcp_protocol_.RestartDecoder(); // make sure to set the state machine to expect a header
                 received_bytes_ = 0;
+                WriteSendBuffer(TCPProtocol::kCorruptData, 0);
             } else if (requested_bytes_ == SIZE_MAX) { // end of good packet
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
                 timer_.cancel(); // anything we receive should count as a heartbeat
@@ -268,7 +269,7 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
 
                 // Send an ack back after receiving a message, for client, command link only
                 // per specification the ack should be the command + num received bytes
-                if (!is_server_ && !monitor_link_ && DataInRecvBuffer()) {
+                if (!is_server_ && !monitor_link_) { // remove condition DataInRecvBuffer() 1/28
                     std::vector<uint32_t> data = { static_cast<uint32_t>(received_bytes_) };
                     WriteSendBuffer(recv_command_.command, data);
                 }

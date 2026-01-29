@@ -67,7 +67,7 @@ size_t TCPProtocol::DecodePackets(std::array<uint8_t, RECVBUFFSIZE> &pbuffer, Co
                 recv_cmd.arguments[i] = ntohl(word32);
                 buff_idx += sizeof(uint32_t);
             }
-            std::cout << "Arg Count: " << decoder_arg_count_ << " buf_idx: " << buff_idx << "/" << sizeof(Footer) << std::endl;
+            //std::cout << "Arg Count: " << decoder_arg_count_ << " buf_idx: " << buff_idx << "/" << sizeof(Footer) << std::endl;
             Footer footer{};
             std::memcpy(&footer, &pbuffer[buff_idx], sizeof(Footer));
 
