@@ -16,7 +16,7 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       use_heartbeat_(use_heartbeat),
       is_server_(is_server),
       monitor_link_(monitor_link),
-      debug_flag_(false,
+      debug_flag_(false),
       restart_client_(false),
       received_bytes_(0),
       timer_(io_context),
@@ -249,7 +249,8 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 requested_bytes_ = sizeof(TCPProtocol::Header);
                 tcp_protocol_.RestartDecoder(); // make sure to set the state machine to expect a header
                 received_bytes_ = 0;
-                WriteSendBuffer(TCPProtocol::kCorruptData, 0);
+                std::vector<uint32_t> tmp;
+                WriteSendBuffer(TCPProtocol::kCorruptData, tmp);
             } else if (requested_bytes_ == SIZE_MAX) { // end of good packet
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
                 timer_.cancel(); // anything we receive should count as a heartbeat
