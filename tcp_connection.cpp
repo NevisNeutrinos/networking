@@ -204,7 +204,7 @@ void TCPConnection::ReadData() {
     // Set timeout to 1 seconds, the heartbeat
     if (stop_server_.load()) return;
     if (!is_server_ && restart_client_.load()) StartClient();
-    constexpr auto read_timeout = std::chrono::milliseconds(1500); // give 0.5s grace period
+    constexpr auto read_timeout = std::chrono::milliseconds(5000); // give 0.5s grace period
 
     if (debug_flag_) std::cout << "Setting read to " << requested_bytes_ << "B " << std::endl;
 
@@ -217,7 +217,8 @@ void TCPConnection::ReadData() {
     );
 
     // Timeout in case something happens in the middle of the packet read
-    if (!is_server_ && client_connected_ && (packet_read_ || use_heartbeat_) && !monitor_link_) {
+    // if (!is_server_ && client_connected_ && (packet_read_ || use_heartbeat_) && !monitor_link_) {
+    if ((is_server_ || client_connected_) && (packet_read_ || use_heartbeat_)) {
         if (debug_flag_) std::cout << "Resetting read timer [" << reset_read_timer_ << "]" << " (" << elapsed << ")" << std::endl;
         timer_.expires_after(read_timeout);
         start_ = now;
@@ -225,11 +226,15 @@ void TCPConnection::ReadData() {
         timer_.async_wait([this, self](const asio::error_code& ec) {
             // operation_aborted is the timer cancel. If success that means the timer completed
             if (ec == asio::error::operation_aborted) {
+                if (debug_flag_) std::cout << "Reset read timer.." << std::endl;
                 return; // Timer cancelled, read completed successfully
             }
             packet_read_ = false;
             // if (debug_flag_)
-            std::cout << "Read timeout or no heartbeat received. Emptying buffer..  EC=" << ec.message() << std::endl;
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_).count();
+            std::cout << "Read timeout or no heartbeat received, ms elapsed [" << elapsed
+                        << "]. Emptying buffer..  EC=" << ec.message() << std::endl;
             // Empty the socket buffer if there's any data in it
             ClearSocketBuffer();
             client_connected_ = false;
@@ -259,21 +264,22 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
             }
             // Will keep getting kCorruptData until a good start code is found
             if (requested_bytes_ == TCPProtocol::kCorruptData) { // 0xFFFFFFFF
+                if (debug_flag_) std::cout << "Corrupted data received! :'(" << std::endl;
                 timer_.cancel(); // cancel the wait since we are receiving data just corrupted
                 requested_bytes_ = sizeof(TCPProtocol::Header);
                 tcp_protocol_.RestartDecoder(); // make sure to set the state machine to expect a header
                 received_bytes_ = 0;
+                std::vector<uint32_t> tmp;
+                WriteSendBuffer(TCPProtocol::kCorruptData, tmp);
             } else if (requested_bytes_ == SIZE_MAX) { // end of good packet
                 if (debug_flag_) std::cout << "Cancelling timer, expiry: " << std::endl;
                 timer_.cancel(); // anything we receive should count as a heartbeat
                 if (use_heartbeat_ && recv_command_.command == TCPProtocol::kHeartBeat) {
-                    // if (debug_flag_)
+                    // 1/21 If a heartbeat can just use the cmd itself without writing to buffer
                     // std::cout << "Heartbeat received.." << std::endl;
-                    // timer_.expires_after(std::chrono::seconds(1));
                     reset_read_timer_ = true;
-                    WriteRecvBuffer(recv_command_);
                 } else {
-                    // Full packet received so place into the queue and notify consumers
+                    // Full packet received so place into the queue and notify consumers, except for heartbeat
                     WriteRecvBuffer(recv_command_);
                     cmd_available_.notify_all();
                 }
@@ -284,13 +290,9 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
 
                 // Send an ack back after receiving a message, for client, command link only
                 // per specification the ack should be the command + num received bytes
-                if (!is_server_ && !monitor_link_ && DataInRecvBuffer()) {
+                if (!is_server_ && !monitor_link_) { // remove condition DataInRecvBuffer() 1/28
                     std::vector<uint32_t> data = { static_cast<uint32_t>(received_bytes_) };
-                    {
-                        std::lock_guard<std::mutex> lock(recv_mutex_);
-                        WriteSendBuffer(recv_command_buffer_.back().command, data);
-                        if (TCPProtocol::kHeartBeat == recv_command_buffer_.back().command) recv_command_buffer_.pop_back();
-                    }
+                    WriteSendBuffer(recv_command_.command, data);
                 }
                 received_bytes_ = 0;
             }
@@ -356,6 +358,7 @@ Command TCPConnection::ReadRecvBuffer() {
         return !recv_command_buffer_.empty() || stop_cmd_read_;
     });
     if (stop_cmd_read_) return {0, 0};
+    // The conditional variable acquires lock upon waking, unlocked when leaving scope
     Command command = recv_command_buffer_.front();
     recv_command_buffer_.pop_front();
     return command;
