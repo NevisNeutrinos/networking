@@ -47,23 +47,23 @@ std::vector<uint32_t> GetUserInputList() {
     return numbers;
 }
 
-void SendHeartbeat(TCPConnection &server) {
+void SendHeartbeat(std::shared_ptr<TCPConnection> &server) {
     auto start = std::chrono::steady_clock::now();
     while (keepRunning.load()) {
         auto now = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
         if (elapsed > 1000) {
-            server.WriteSendBuffer(Command{TCPProtocol::kHeartBeat, 0});
+            server->WriteSendBuffer(Command{TCPProtocol::kHeartBeat, 0});
             start = now;
         }
     }
 }
 
-void MonitorServer(TCPConnection &cmd_server, TCPConnection &monitor_server) {
+void MonitorServer(std::shared_ptr<TCPConnection> &cmd_server, std::shared_ptr<TCPConnection> &monitor_server) {
     while (keepRunning.load()) {
-        if (monitor_server.DataInRecvBuffer()) {
+        if (monitor_server->DataInRecvBuffer()) {
             // If monitoring data is received, read the command and print it
-            Command cmd = monitor_server.ReadRecvBuffer();
+            Command cmd = monitor_server->ReadRecvBuffer();
             std::cout << "************** Server Monitor Link ****************" << std::endl;
             std::cout << std::hex << cmd.command << ": ";
             std::cout << "[";
@@ -79,9 +79,9 @@ void MonitorServer(TCPConnection &cmd_server, TCPConnection &monitor_server) {
             PrintState();
         }
 
-        if (cmd_server.DataInRecvBuffer()) {
+        if (cmd_server->DataInRecvBuffer()) {
             // If monitoring data is received, read the command and print it
-            Command cmd = cmd_server.ReadRecvBuffer();
+            Command cmd = cmd_server->ReadRecvBuffer();
             if (cmd.command != TCPProtocol::kHeartBeat) {
                 std::cout << "************** Server Command Link ****************" << std::endl;
                 std::cout << std::hex << cmd.command << ": ";
@@ -113,8 +113,12 @@ int main(int argc, char* argv[]) {
 
     asio::io_context io_context;
     std::cout << "Starting pGRAMS server..." << std::endl;
-    TCPConnection cmd_server(io_context, ip_address, cmd_port, true, false, false);
-    TCPConnection monitor_server(io_context, ip_address, monitor_port, true, false, true);
+    std::shared_ptr<TCPConnection> cmd_server;
+    cmd_server = std::make_shared<TCPConnection>(io_context, ip_address, cmd_port, true, false, false);
+    std::shared_ptr<TCPConnection> monitor_server;
+    monitor_server = std::make_shared<TCPConnection>(io_context, ip_address, monitor_port, true, false, true);
+    cmd_server->Start();
+    monitor_server->Start();
     std::cout << "Starting IO Context..." << std::endl;
 
     // Guard to keep IO contex from completely before we want to quit
@@ -138,7 +142,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Enter Arg: \n";
         std::vector<uint32_t> args = GetUserInputList();
         std::cout << "Sending command" << std::endl;
-        cmd_server.WriteSendBuffer(cmd, args);
+        cmd_server->WriteSendBuffer(cmd, args);
     }
     heartbeat_thread.join();
     monitor_thread.join();

@@ -42,13 +42,13 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
         }
         if (debug_flag_) std::cout << "Acceptor/accept socket value = " << acceptor_.has_value() << " / "
                                     << accept_socket_.has_value() << std::endl;
-        StartServer();
+        // StartServer();
     }
     else {
         std::cout << "Starting Receive Client on Address [" << ip_address << "] Port [" << port << "]" << std::endl;
         if (use_heartbeat) reset_read_timer_ = true;
         start_ = std::chrono::steady_clock::now();
-        StartClient();
+        // StartClient();
     }
 }
 
@@ -73,21 +73,35 @@ TCPConnection::~TCPConnection() {
     std::cout << "Destructed TCP connection [" << port_ << "]" << std::endl;
 }
 
+void TCPConnection::Start() {
+    if (is_server_) {
+        std::cout << "Starting Server.." << std::endl;
+        StartServer();
+    }
+    else {
+        std::cout << "Starting Client.." << std::endl;
+        StartClient();
+    }
+}
+
+
 void TCPConnection::StartServer() {
     if (stop_server_.load()) {
         stop_cmd_write_.store(true);
         return;
     }
-    acceptor_->async_accept(*accept_socket_, [this](std::error_code ec) {
+    auto self = shared_from_this();
+    acceptor_->async_accept(*accept_socket_, [this, self](std::error_code ec) {
       if (!ec) {
         std::cout << "New client connected!" << std::endl;
           socket_ = std::move(*accept_socket_);
           tcp_protocol_.RestartDecoder();
           requested_bytes_ = sizeof(TCPProtocol::Header);
           requested_bytes_ = sizeof(TCPProtocol::Header);
-          std::thread(&TCPConnection::ReadData, this).detach();
-          std::thread(&TCPConnection::SendData, this).detach();
-          if (use_heartbeat_) std::thread(&TCPConnection::SendHeartbeat, this).detach();
+          // auto self = shared_from_this();
+          std::thread(&TCPConnection::ReadData, self).detach();
+          std::thread(&TCPConnection::SendData, self).detach();
+          if (use_heartbeat_) std::thread(&TCPConnection::SendHeartbeat, self).detach();
       } else {
           if (debug_flag_) std::cout << "Client connection failed with error: " << ec.message() << std::endl;
       }
@@ -124,7 +138,8 @@ void TCPConnection::StartClient() {
 
     if (debug_flag_) std::cout << "--> Async_connect" << std::endl;
     // Receive command socket
-    socket_.async_connect(endpoint_, [this](const asio::error_code& ec) {
+    auto self = shared_from_this();
+    socket_.async_connect(endpoint_, [this, self](const asio::error_code& ec) {
         if (!ec) {
             std::cout << "Receive socket connected to server! [" << port_ << "]" << " 0FD: " << socket_.native_handle() << std::endl;
             timeout_.cancel();
@@ -137,7 +152,8 @@ void TCPConnection::StartClient() {
             restart_client_ = false;
             requested_bytes_ = monitor_link_ ? 0xFFFF : sizeof(TCPProtocol::Header); // large read for status link
             ReadData(); // move this to an ASIO event driven operation instead of a thread
-            write_data_thread_ = std::thread(&TCPConnection::SendData, this);
+            auto self = shared_from_this();
+            write_data_thread_ = std::thread(&TCPConnection::SendData, self);
             client_connected_ = true;
         } else {
             std::cerr << "Receive socket connection failed: " << ec.message() << " [" << port_ << "]" << std::endl;
@@ -148,14 +164,16 @@ void TCPConnection::StartClient() {
                 write_data_thread_.join();
                 stop_cmd_write_.store(false);
             }
+            if (stop_server_.load()) return;
             std::this_thread::sleep_for(std::chrono::seconds(2));
+            if (stop_server_.load()) return;
             StartClient();
         }
     });
 
     // Set up a timeout (e.g., 3 seconds)
     timeout_.expires_after(std::chrono::seconds(5));
-    timeout_.async_wait([this](const asio::error_code& ec) {
+    timeout_.async_wait([this, self](const asio::error_code& ec) {
         if (ec == asio::error::operation_aborted) {
             return; // Timer cancelled, connection completed successfully
         }
@@ -192,9 +210,10 @@ void TCPConnection::ReadData() {
 
     auto now = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_).count();
+    auto self = shared_from_this();
     asio::async_read( socket_,// Or async_read if you need exactly N bytes
                       asio::buffer(buffer_, requested_bytes_), // Read up to buffer size
-                std::bind(&TCPConnection::ReadHandler, this, std::placeholders::_1, std::placeholders::_2)
+                std::bind(&TCPConnection::ReadHandler, self, std::placeholders::_1, std::placeholders::_2)
     );
 
     // Timeout in case something happens in the middle of the packet read
@@ -202,7 +221,8 @@ void TCPConnection::ReadData() {
         if (debug_flag_) std::cout << "Resetting read timer [" << reset_read_timer_ << "]" << " (" << elapsed << ")" << std::endl;
         timer_.expires_after(read_timeout);
         start_ = now;
-        timer_.async_wait([this](const asio::error_code& ec) {
+        auto self = shared_from_this();
+        timer_.async_wait([this, self](const asio::error_code& ec) {
             // operation_aborted is the timer cancel. If success that means the timer completed
             if (ec == asio::error::operation_aborted) {
                 return; // Timer cancelled, read completed successfully
@@ -216,7 +236,7 @@ void TCPConnection::ReadData() {
             restart_client_.store(true);
             if (debug_flag_) std::cout << "Will try reconnecting...  [" << port_ << "]" << std::endl;
             if (socket_.is_open()) socket_.cancel();
-            StartClient();
+            if (!stop_server_.load()) StartClient();
         });
     }
 }
@@ -331,7 +351,8 @@ bool TCPConnection::DataInRecvBuffer() {
 
 Command TCPConnection::ReadRecvBuffer() {
     std::unique_lock cmd_lock(recv_mutex_);
-    cmd_available_.wait(cmd_lock, [this] {
+    auto self = shared_from_this();
+    cmd_available_.wait(cmd_lock, [this, self] {
         return !recv_command_buffer_.empty() || stop_cmd_read_;
     });
     if (stop_cmd_read_) return {0, 0};
@@ -410,8 +431,8 @@ void TCPConnection::SendData() {
     if (debug_flag_) std::cout << stop_cmd_write_.load() << "/" << stop_server_.load()  << std::endl;
     while (!stop_server_.load() && !stop_cmd_write_.load()) {
         std::unique_lock<std::mutex> lock(send_mutex_);
-
-        send_cmd_available_.wait(lock, [this] { // FIXME add self
+        auto self = shared_from_this();
+        send_cmd_available_.wait(lock, [this, self] {
         return !send_command_buffer_.empty() || stop_cmd_write_.load() || stop_server_.load();
         });
         if (stop_cmd_write_.load() || stop_server_.load()) break; // just an extra catch
@@ -426,7 +447,7 @@ void TCPConnection::SendData() {
         asio::socket_base::send_buffer_size option_send;
         socket_.get_option(option_send);
         int send_buffer_size = option_send.value();
-        async_write(socket_, asio::buffer(buffer), [this](const asio::error_code &ec,
+        async_write(socket_, asio::buffer(buffer), [this, self](const asio::error_code &ec,
                                                                             const std::size_t &bytes_sent) {
             if (!ec) {
                 // if (debug_flag_)

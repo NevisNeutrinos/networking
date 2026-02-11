@@ -59,14 +59,16 @@ int main(int argc, char* argv[]) {
     try {
         asio::io_context io_context;
         std::cout << "Starting client..." << std::endl;
-        TCPConnection client(io_context, ip_address, port, false, false, false);
+        std::shared_ptr<TCPConnection> client;
+        client = std::make_shared<TCPConnection>(io_context, ip_address, port, false, false, false);
+        client->Start();
         std::cout << "Starting IO Context..." << std::endl;
 
         // Guard to keep IO contex from completely before we want to quit
         asio::executor_work_guard<asio::io_context::executor_type> work_guard(io_context.get_executor());
         std::thread io_thread([&]() { io_context.run(); });
 
-        while (client.getSocketIsOpen()) {
+        while (client->getSocketIsOpen()) {
             PrintState();
             uint32_t input = GetUserInput();
 
@@ -82,12 +84,12 @@ int main(int argc, char* argv[]) {
                     std::cout << "Enter Arg: \n";
                     std::vector<uint32_t> args = GetUserInputList();
                     std::cout << "Sending command" << std::endl;
-                    client.WriteSendBuffer(cmd, args);
+                    client->WriteSendBuffer(cmd, args);
                     break;
                 }
                 case 1: {
                     std::cout << "Receiving command" << std::endl;
-                    Command cmd = client.ReadRecvBuffer();
+                    Command cmd = client->ReadRecvBuffer();
                     std::cout << "******************************" << std::endl;
                     std::cout << "Command: " << cmd.command << std::endl;
                     for (auto &arg : cmd.arguments) {std::cout << arg << std::endl;}
@@ -96,7 +98,7 @@ int main(int argc, char* argv[]) {
                 }
                 case 2: {
                     std::cout << "Receiving All command" << std::endl;
-                    std::vector<Command> cmd_vec = client.ReadRecvBuffer(10000);
+                    std::vector<Command> cmd_vec = client->ReadRecvBuffer(10000);
                     std::cout << "******************************" << std::endl;
                     for (auto &cmd : cmd_vec) {
                         std::cout << " -- Command: " << cmd.command << std::endl;

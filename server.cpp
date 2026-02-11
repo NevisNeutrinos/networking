@@ -55,7 +55,9 @@ int main(int argc, char* argv[]) {
     try {
         asio::io_context io_context;
         std::cout << "Starting server..." << std::endl;
-        TCPConnection server(io_context, ip_address, port, true, true, false);
+        std::shared_ptr<TCPConnection> server;
+        server = std::make_shared<TCPConnection>(io_context, ip_address, port, true, true, false);
+        server->Start();
         std::cout << "Starting IO Context..." << std::endl;
 
         // Guard to keep IO contex from completely before we want to quit
@@ -78,12 +80,12 @@ int main(int argc, char* argv[]) {
                     std::cout << "Enter Arg: \n";
                     std::vector<uint32_t> args = GetUserInputList();
                     std::cout << "Sending command" << std::endl;
-                    server.WriteSendBuffer(cmd, args);
+                    server->WriteSendBuffer(cmd, args);
                     break;
                 }
                 case 1: {
                     std::cout << "Receiving command" << std::endl;
-                    Command cmd = server.ReadRecvBuffer();
+                    Command cmd = server->ReadRecvBuffer();
                     std::cout << "******************************" << std::endl;
                     std::cout << "Command: " << cmd.command << std::endl;
                     for (auto &arg : cmd.arguments) {std::cout << arg << std::endl;}
@@ -92,7 +94,7 @@ int main(int argc, char* argv[]) {
                 }
                 case 2: {
                     std::cout << "Receiving All command" << std::endl;
-                    std::vector<Command> cmd_vec = server.ReadRecvBuffer(10000);
+                    std::vector<Command> cmd_vec = server->ReadRecvBuffer(10000);
                     std::cout << "******************************" << std::endl;
                     for (auto &cmd : cmd_vec) {
                         std::cout << " -- Command: " << cmd.command << std::endl;

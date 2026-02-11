@@ -58,9 +58,12 @@ int main(int argc, char* argv[]) {
 
     asio::io_context io_context;
     std::cout << "Starting pGRAMS client..." << std::endl;
-    TCPConnection cmd_client(io_context, ip_address, cmd_port, false, true, false);
-    // FIXME taking up too much IO context bandwidth/blocking when reconnecting?
-    TCPConnection monitor_client(io_context, ip_address, monitor_port, false, false, true);
+    std::shared_ptr<TCPConnection> cmd_client;
+    cmd_client = std::make_shared<TCPConnection>(io_context, ip_address, cmd_port, false, true, false);
+    std::shared_ptr<TCPConnection> monitor_client;
+    monitor_client = std::make_shared<TCPConnection>(io_context, ip_address, monitor_port, false, false, true);
+    cmd_client->Start();
+    monitor_client->Start();
     std::cout << "Starting IO Context..." << std::endl;
 
     // Guard to keep IO contex from completely before we want to quit
@@ -75,9 +78,9 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
         // If a command is received
-        if (cmd_client.DataInRecvBuffer()) {
+        if (cmd_client->DataInRecvBuffer()) {
             // Read the command and print it
-            Command cmd = cmd_client.ReadRecvBuffer();
+            Command cmd = cmd_client->ReadRecvBuffer();
             std::cout << "************** Client Command Link ****************" << std::endl;
             std::cout << std::hex << cmd.command << ": ";
             std::cout << "[";
@@ -86,21 +89,21 @@ int main(int argc, char* argv[]) {
             std::cout << "******************************" << std::endl;
 
             // Echo back the command
-//            cmd_client.WriteSendBuffer(cmd);
+//            cmd_client->WriteSendBuffer(cmd);
         }
 
         if (elapsed > send_period) {
             std::cout << "\033[35m Sending fake monitor data.. (" << fakeMetricsSentCount << ") \033[0m" << std::endl;
             Command cmd(0xFFF, stat_words.size());
             cmd.arguments = stat_words;
-            monitor_client.WriteSendBuffer(cmd);
+            monitor_client->WriteSendBuffer(cmd);
             start = now; // update the time
             fakeMetricsSentCount++;
         }
 
-        if (monitor_client.DataInRecvBuffer()) {
+        if (monitor_client->DataInRecvBuffer()) {
             // Read the command and print it
-            Command cmd = monitor_client.ReadRecvBuffer();
+            Command cmd = monitor_client->ReadRecvBuffer();
             std::cout << "************ Client Monitor Link ***************" << std::endl;
             std::cout << std::hex << cmd.command << ": ";
             std::cout << "[";

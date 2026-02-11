@@ -22,6 +22,7 @@ public:
     std::deque<Command> recv_command_buffer_;
 
     // Interface to send/receive commands and data
+    void Start();
     void WriteSendBuffer(uint16_t cmd, std::vector<uint32_t> &vec);
     void WriteSendBuffer(const Command& cmd_struct);
     void WriteRecvBuffer(const Command& cmd_struct);
@@ -33,6 +34,7 @@ public:
 
     bool getSocketIsOpen() const { return socket_.is_open(); }
     void setStopCmdRead(const bool stop_read) {
+        stop_server_.store(true);
         stop_cmd_read_ = stop_read;
         cmd_available_.notify_all();
     }
@@ -41,6 +43,7 @@ public:
     std::thread python_io_context_thread_;
     std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> python_work_guard_;
     void PythonRun(asio::io_context &ctx) {
+        Start();
         python_work_guard_ = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(ctx.get_executor());
         python_io_context_thread_ = std::thread([&ctx]() {
             try {
