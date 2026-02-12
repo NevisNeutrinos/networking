@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
             Command cmd(0xFFF, stat_words.size() + 1);
             cmd.arguments.at(0) = fakeMetricsSentCount;
             for (size_t i = 0; i < stat_words.size(); i++) cmd.arguments.at(i+1) = stat_words.at(i);
-            monitor_client.WriteSendBuffer(cmd);
+            monitor_client->WriteSendBuffer(cmd);
             start = now; // update the time
             fakeMetricsSentCount++;
         }
