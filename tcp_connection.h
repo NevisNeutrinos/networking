@@ -33,9 +33,9 @@ public:
     std::vector<Command> ReadRecvBuffer(size_t num_cmds);
 
     bool getSocketIsOpen() const { return socket_.is_open(); }
-    void setStopCmdRead(const bool stop_read) {
+    void setStopCmdRead() {
         stop_server_.store(true);
-        stop_cmd_read_ = stop_read;
+        stop_cmd_read_.store(true);
         cmd_available_.notify_all();
     }
 
@@ -54,7 +54,7 @@ public:
         });
     }
     void PythonStop(asio::io_context &ctx) {
-        setStopCmdRead(true);
+        setStopCmdRead();
         ctx.stop();
         if (python_io_context_thread_.joinable()) python_io_context_thread_.join();
         python_work_guard_.reset();
