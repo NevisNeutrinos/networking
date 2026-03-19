@@ -111,6 +111,7 @@ void TCPConnection::StartServer() {
 
 void TCPConnection::StartClient() {
     if (stop_server_.load()) return;
+    std::this_thread::sleep_for(std::chrono::seconds(1)); // sleep for 1s to keep from reconnecting to a zombie port
     if (socket_.is_open()) {
         if (debug_flag_) std::cout << "Empty and Cancel socket operations" << std::endl;
         std::unique_lock<std::mutex> slock(sock_mutex_);
