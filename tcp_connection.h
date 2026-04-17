@@ -94,6 +94,7 @@ private:
     asio::error_code read_error_;
     size_t requested_bytes_;
     size_t received_bytes_;
+    size_t heartbeat_count_;
     std::chrono::high_resolution_clock::time_point chrono_read_start_;
     asio::steady_timer timer_;
     bool read_in_progress_{false};

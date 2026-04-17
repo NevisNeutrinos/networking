@@ -19,6 +19,7 @@ TCPConnection::TCPConnection(asio::io_context& io_context, const std::string& ip
       debug_flag_(false),
       restart_client_(false),
       received_bytes_(0),
+      heartbeat_count_(0),
       timer_(io_context),
       recv_command_(0,0) {
 
@@ -277,7 +278,11 @@ void TCPConnection::ReadHandler(const asio::error_code& ec, std::size_t bytes_tr
                 timer_.cancel(); // anything we receive should count as a heartbeat
                 if (use_heartbeat_ && recv_command_.command == TCPProtocol::kHeartBeat) {
                     // 1/21 If a heartbeat can just use the cmd itself without writing to buffer
-                    // std::cout << "Heartbeat received.." << std::endl;
+                    // Track the hearbeat count so we don't over-print but can still monitor
+                    heartbeat_count_++;
+                    if ((heartbeat_count_ % 60) == 0) {
+                        std::cout << "Heartbeat count: " << heartbeat_count_ << std::endl;
+                    }
                     reset_read_timer_ = true;
                 } else {
                     // Full packet received so place into the queue and notify consumers, except for heartbeat
